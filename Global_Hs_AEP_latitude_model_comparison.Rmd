@@ -1,0 +1,743 @@
+---
+title: "A World of Waves: Why Latitude Explains So Much About the Biggest Waves—but Not Everything"
+author: "Julian O'Grady"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_folding: hide
+  word_document:
+    toc: true
+params:
+  aris: [1, 40]
+  fit_min_lat: -60
+  fit_max_lat: 63
+  period_fixed: 120
+  a_mode: "equator"
+  a_fixed_manual: 4
+  equator_band: 5
+---
+
+```{r setup, include=FALSE}
+# Code is included in HTML but folded closed by default, allowing the
+# "Show code" control to reveal it when requested.
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 11,
+  fig.height = 6.5,
+  fig.align = "center"
+)
+
+library(terra)
+library(data.table)
+library(leaflet)
+```
+
+# Introduction
+
+Anyone who follows swell knows that some parts of the world are naturally more exposed to big waves than others. Latitude is a surprisingly powerful part of that story. The energetic storm belts of the mid-latitudes produce more frequent large wind seas and long-travelling swell than most tropical waters. But latitude cannot tell the whole story: two coastlines on the same line of latitude can have very different wave climates because of land, fetch, swell exposure and regional storm tracks.
+
+This report tests that idea using **significant wave height** ($H_s$). This is a statistical description of a sea state, roughly corresponding to the average height of its highest one-third of waves. It is not the height of the single largest wave, nor is it automatically the height of the breaking wave face at a surf break.
+
+The full wave-height field comes from a numerical wave-model dataset, with a Generalised Extreme Value (GEV) distribution fitted at each ocean grid cell. A deliberately simple latitude-only curve is then fitted as a benchmark. The comparison asks: **how much of the global pattern can latitude explain, and what extra regional detail does the numerical model add?** It is not an independent validation against buoy or satellite observations.
+
+## A quick guide to the jargon of an ocean-wave climate scientist
+
+| Term | Plain-language meaning |
+|:--|:--|
+| Significant wave height, $H_s$ | A standard measure of the overall size of a sea state; roughly the average of the highest one-third of waves. |
+| ARI (average recurrence interval) | How rarely a level is expected to occur on average. A 40-year ARI is much rarer than a 1-year ARI; it is not a storm lasting 40 years. |
+| AEP (annual exceedance probability) | The chance that a level is exceeded at least once in a year under the statistical model. |
+| GEV-derived estimate | An extreme wave height calculated from a statistical distribution fitted to numerical wave-model output. |
+| Latitude-only model | A simple smooth curve that gives every ocean location at the same latitude the same expected extreme $H_s$. |
+| Residual | What is left after subtracting the latitude-only value from the full model value. |
+| $R^2$ | The share of geographic variation represented by the latitude-only model: 1 is a perfect match and 0 means it explains none of that variation. |
+
+# Aim
+
+This analysis compares GEV-derived estimates of extreme $H_s$ for **1-year and 40-year ARIs** with a simple cosine curve based only on latitude. In practical terms, it will:
+
+1. calculate the 1-year and 40-year extreme $H_s$ at each ocean grid cell;
+2. fit a smooth latitude-only curve to those values;
+3. measure how much of the global pattern is represented by latitude alone; and
+4. map where the full numerical-model estimate is higher or lower than the latitude-only expectation.
+
+Positive residuals indicate places where the numerical-model-derived estimate is larger than the latitude-only expectation. Negative residuals indicate places where it is smaller. Residuals should be interpreted as spatial features represented by the model-derived field, not automatically as physical truth: they may also reflect model resolution, forcing and extreme-value fitting choices.
+
+**Who might find this useful?** This report is intended as an educational explanation for surfers, students, educators and anyone curious about where big waves occur. It provides a simple touchstone for understanding the fundamental controls on the global wave climate---latitude, wind and storm belts, fetch, basin geometry and event rarity---rather than a decision-support or engineering-design product.
+
+# Controls on extreme significant wave height
+
+At the broadest scale, three sets of controls determine the extreme significant wave height likely to occur at a location.
+
+First, consider the **storm climate**. Imagine a water-only Earth with no continents. Wave heights would still vary with latitude because the tropics, subtropics and mid-latitudes experience different winds and storm systems. Waves at a location would come both from nearby weather and from distant storms sending out swell. The intensity, size, track, travelling speed and duration of each storm would still matter.
+
+**Read more about global circulation patterns:** the Australian Bureau of Meteorology explains how tropical rising air contributes to the global pressure and wind belts in its [subtropical-ridge explainer](https://www.bom.gov.au/resources/learn-and-explore/climate-knowledge-centre/climate-factors/subtropical-ridge), and describes the storm-bearing Southern Ocean westerlies in its [Southern Annular Mode explainer](https://www.bom.gov.au/climate/sam/).
+
+Second, the real world has **land and ocean basins**. Fetch---the distance over water across which the wind blows in a consistent direction---acts like a runway for wave growth. A long, unobstructed ocean path gives wind more room to build waves, while islands and continents can shelter a coast or block swell arriving from a particular direction. The three classic controls on locally generated wind waves are wind speed, wind duration and fetch ([NOAA National Ocean Service](https://oceanservice.noaa.gov/education/tutorial_currents/03coastal1.html)).
+
+Third, the answer depends on **how rare an event is being considered**. A 40-year ARI significant wave height will generally be larger than a 1-year ARI value because waiting longer gives more opportunity for an unusual storm to occur. This does not mean that the storm lasts for 40 years, or that it arrives regularly every 40 years. ARI describes a long-term average frequency.
+
+Other important controls include swell direction, seasonal and longer-term climate variability, sea ice, and currents that can steepen or focus waves. Near shore, the seabed becomes crucial: depth, refraction, shoaling, bottom friction and breaking transform the offshore sea state before it becomes surf. This report therefore describes the **offshore extreme wave climate at the model scale**, not the size or quality of waves at a particular surf break.
+
+# Estimating 1-year and 40-year storm waves
+
+This analysis estimates two levels of extreme significant wave height: the 1-year ARI, representing relatively frequent storm waves, and the 40-year ARI, representing much rarer and generally larger storm waves. These are average recurrence intervals rather than schedules: under the statistical convention used here, the chance of exceeding each level in any year is `r formatC(100 * (1 - exp(-1)), digits = 1, format = "f")`% and `r formatC(100 * (1 - exp(-1 / 40)), digits = 2, format = "f")`%, respectively.
+
+The code reads the fitted extreme-value parameters, calculates the two wave-height maps, fits a latitude-only benchmark to each one and masks the displayed rasters to the latitude range used for fitting.
+
+```{r estimate-return-periods, results='hide'}
+# Return periods assessed in this report.  Under the Poisson convention,
+# AEP = 1 - exp(-1 / ARI), so the 1-year ARI has AEP = 0.6321 rather than 1.
+ARIs <- as.numeric(params$aris)
+stopifnot(all(is.finite(ARIs)), all(ARIs > 0))
+
+fit_min_lat <- params$fit_min_lat
+fit_max_lat <- params$fit_max_lat
+
+# Latitude-only model:
+# Hs = a + b * (1 - cos(2*pi*(latitude - phase)/period))
+# Keeping the period fixed avoids unstable alternative minima in the nonlinear fit.
+period_fixed <- params$period_fixed
+
+# Set the intercept from the equatorial median, or supply a manual value.
+a_mode <- params$a_mode
+a_fixed_manual <- params$a_fixed_manual
+equator_band <- params$equator_band
+
+stopifnot(fit_min_lat < fit_max_lat)
+stopifnot(a_mode %in% c("equator", "fixed"))
+
+# Read the GEV parameter field.
+ncfile <- "CAWCR_GEVparameters.nc"
+data_url <- paste0(
+  "https://data-cbr.csiro.au/thredds/fileServer/catch_all/",
+  "OA_SLE_archive/COWCLIP/EXTREMES/EVA_R/CSIRO_withMidCentury/",
+  "CAWCR_GEVparameters.nc"
+)
+
+if (!file.exists(ncfile)) {
+  options(timeout = max(600, getOption("timeout")))
+  download.file(data_url, ncfile, mode = "wb")
+}
+
+r <- rast(ncfile)
+
+# Confirm the layer order against the NetCDF metadata before use.
+# The supplied file is assumed to contain: location, scale and shape.
+stopifnot(nlyr(r) >= 3)
+loc <- r[[1]]
+scale <- r[[2]]
+shape <- r[[3]]
+
+# Calculate the return levels and fit the latitude-only models.
+# Julian's original Hs colour scale.
+colz <- rev(c(
+  "#000078", "#0000BB", "#0000FF", "#0C3AFC", "#1975FA", "#25B0F7",
+  "#32EBF5", "#73EEE6", "#B4F1D7", "#F5F5C8", "#F5F564", "#F5E032",
+  "#F6CC00", "#F7A300", "#F97A00", "#FB5100", "#FF0000", "#DA0006",
+  "#B5000D", "#910014", "#7B003D", "#660066", "#88008C", "#AB00B2",
+  "#CD00D8", "#F000FF", "#CAA6DE", "#DBA7DD", "#EDA9D2"
+))
+colzRamp <- grDevices::colorRampPalette(rev(colz))
+residual_ramp <- grDevices::colorRampPalette(c("#053061", "#2166AC", "#92C5DE", "#F7F7F7", "#F4A582", "#B2182B", "#67001F"))
+lat_r <- init(loc, "y")
+names(lat_r) <- "latitude"
+
+run_return_period <- function(ARI) {
+  AEP <- 1 - exp(-1 / ARI)
+  aep_label <- paste0("ARI = ", ARI, " year", if (ARI == 1) "" else "s", "; AEP = ", formatC(AEP, digits = 4, format = "f"))
+  y <- -log1p(-AEP)
+  Glob_Hs <- ifel(abs(shape) < 1e-8, loc - scale * log(y), loc + scale * (y^(-shape) - 1) / shape)
+  names(Glob_Hs) <- paste0("Hs_ARI_", ARI, "yr")
+  dt <- as.data.table(as.data.frame(c(Glob_Hs, lat_r), na.rm = TRUE))
+  setnames(dt, c("Hs", "latitude"))
+  dt <- dt[is.finite(Hs) & is.finite(latitude)]
+  lat_q <- dt[, .(p5 = quantile(Hs, .05), p25 = quantile(Hs, .25), p50 = quantile(Hs, .50), p75 = quantile(Hs, .75), p95 = quantile(Hs, .95)), by = latitude]
+  setorder(lat_q, latitude)
+  fit_dat <- copy(dt[latitude >= fit_min_lat & latitude <= fit_max_lat])
+  a_fixed <- if (a_mode == "equator") median(fit_dat[latitude >= -equator_band & latitude <= equator_band, Hs], na.rm = TRUE) else a_fixed_manual
+  fit <- nls(Hs ~ a_fixed + b * (1 - cos(2 * pi * (latitude - phase) / period_fixed)), data = fit_dat, start = list(b = 5, phase = 0), algorithm = "port", lower = c(b = 0, phase = -20), upper = c(b = 30, phase = 20), control = nls.control(maxiter = 500, warnOnly = TRUE))
+  co <- coef(fit)
+  fit_dat[, fitted := predict(fit, newdata = fit_dat)]
+  r2_all <- 1 - sum((fit_dat$Hs - fit_dat$fitted)^2) / sum((fit_dat$Hs - mean(fit_dat$Hs))^2)
+  lat_q_fit <- copy(lat_q[latitude >= fit_min_lat & latitude <= fit_max_lat])
+  lat_q_fit[, fitted := predict(fit, newdata = lat_q_fit)]
+  r2_profile <- 1 - sum((lat_q_fit$p50 - lat_q_fit$fitted)^2) / sum((lat_q_fit$p50 - mean(lat_q_fit$p50))^2)
+  pred <- data.frame(latitude = seq(fit_min_lat, fit_max_lat, length.out = 500)); pred$fit <- predict(fit, newdata = pred)
+  latitude_model <- mask(a_fixed + co[["b"]] * (1 - cos(2 * pi * (lat_r - co[["phase"]]) / period_fixed)), Glob_Hs)
+  residual <- Glob_Hs - latitude_model
+
+  # Map versions are restricted to the latitude range used for fitting.
+  fit_domain <- lat_r >= fit_min_lat & lat_r <= fit_max_lat
+  Hs_map <- ifel(fit_domain, Glob_Hs, NA)
+  latitude_model_map <- ifel(fit_domain, latitude_model, NA)
+  residual_map <- ifel(fit_domain, residual, NA)
+
+  list(
+    ARI = ARI,
+    AEP = AEP,
+    label = aep_label,
+    Hs = Glob_Hs,
+    lat_q = lat_q,
+    pred = pred,
+    a = a_fixed,
+    co = co,
+    r2_all = r2_all,
+    r2_profile = r2_profile,
+    latitude_model = latitude_model,
+    residual = residual,
+    Hs_map = Hs_map,
+    latitude_model_map = latitude_model_map,
+    residual_map = residual_map
+  )
+}
+
+results <- lapply(ARIs, run_return_period)
+
+# Named results used throughout the tables, figures and interpretation.
+result_1yr  <- results[[match(1, ARIs)]]
+result_40yr <- results[[match(40, ARIs)]]
+stopifnot(!is.null(result_1yr), !is.null(result_40yr))
+```
+
+# Results
+
+## The headline result
+
+The share of the full map-to-map variation represented by latitude alone is measured by the all-cell $R^2$. For example, an $R^2$ of 0.80 means that the latitude-only curve represents 80% of the geographic variance in the full field. The median-profile $R^2$ asks an easier question: how well does the curve follow the typical wave height at each latitude? The difference between the two statistics reflects the east--west and regional structure that a latitude-only curve cannot represent.
+
+Before looking at the maps, the simple benchmark can be written as
+
+$$
+\widehat{H_s}(\phi) = a + b\left[1 - \cos\left(\frac{2\pi(\phi-\phi_0)}{P}\right)\right],
+$$
+
+where $\phi$ is latitude, $a$ is the equatorial reference wave height, $b$ controls how much wave height rises away from the tropical baseline, $\phi_0$ allows a small north--south shift and $P$ is the fixed period.
+
+This equation is a compact benchmark, not a physical model of every storm. Table 1 gives the numbers that define the two fitted curves. The period is fixed at 120 degrees for both fits so that the comparison is stable and consistent.
+
+```{r fitted-parameter-table}
+fit_parameter_table <- do.call(rbind, lapply(results, function(x) {
+  data.frame(
+    ARI_years = x$ARI,
+    AEP = x$AEP,
+    equatorial_reference_a_m = x$a,
+    amplitude_b_m = unname(x$co[["b"]]),
+    phase_degrees = unname(x$co[["phase"]]),
+    fixed_period_degrees = period_fixed
+  )
+}))
+
+knitr::kable(
+  fit_parameter_table,
+  digits = 3,
+  col.names = c(
+    "ARI (years)",
+    "AEP",
+    "Equatorial reference, a (m)",
+    "Amplitude, b (m)",
+    "Phase (degrees)",
+    "Fixed period (degrees)"
+  ),
+  caption = "Table 1. The fitted parameters that define the latitude-only curves for the 1-year and 40-year ARIs."
+)
+```
+
+<div class="plain-language-box" role="note">
+<div class="plain-language-icon" aria-hidden="true">i</div>
+<div class="plain-language-content">
+<span class="plain-language-title">In plain language</span>
+<p>Latitude alone represents <strong>`r round(100 * result_1yr$r2_all, 1)`%</strong> of the mapped variation in the 1-year extreme wave heights and <strong>`r round(100 * result_40yr$r2_all, 1)`%</strong> in the 40-year extreme wave heights. That is a remarkably large share for one simple geographic variable, but it still leaves important regional differences for the full numerical model to describe.</p>
+</div>
+</div>
+
+In both cases, more than half of the variance is explained by latitude. This supports the idea that the latitude-dependent distribution of winds and storms is a dominant first-order control. The remaining variance reflects regional influences such as fetch, basin geometry, swell pathways and storm tracks. Latitude therefore describes the broad engine of the global wave climate; it does not tell us exactly how that energy is distributed between individual ocean basins and coastlines.
+
+```{r results-summary}
+summary_table <- do.call(rbind, lapply(results, function(x) data.frame(
+  ARI_years = x$ARI, AEP = x$AEP, R2_all_grid_cells = x$r2_all,
+  variance_explained_all_cells_percent = 100 * x$r2_all,
+  R2_median_latitude_profile = x$r2_profile,
+  unexplained_all_cells_percent = 100 * (1 - x$r2_all)
+)))
+knitr::kable(
+  summary_table,
+  digits = 3,
+  col.names = c(
+    "ARI (years)",
+    "AEP",
+    "R²: all grid cells",
+    "Variance represented (%)",
+    "R²: median latitude profile",
+    "Variance not represented (%)"
+  ),
+  caption = "Table 2. How much of the global wave-height pattern is and is not represented by latitude alone. The raw R² statistics are retained alongside their percentage interpretation."
+)
+```
+
+```{r return-period-plots, fig.width=12, fig.height=5.6, fig.cap="Figure 1. How model-derived extreme significant wave height changes with latitude for the 1-year ARI (left) and 40-year ARI (right). At each latitude, the five percentile lines show the range between relatively low- and high-wave regions; the black line is the global median. The purple curve is the latitude-only benchmark, and the grey vertical lines mark the limits used for fitting. A wide spread between the coloured lines means that places at the same latitude can still have very different wave climates."}
+plot_one_result <- function(x) {
+  matplot(x$lat_q$latitude, as.matrix(x$lat_q[, .(p5, p25, p50, p75, p95)]), type = "l", lty = c(2, 3, 1, 3, 2), lwd = c(1.5, 1.5, 2.5, 1.5, 1.5), col = c("orange", "red", "black", "dodgerblue", "cyan3"), xlab = "Latitude (degrees)", ylab = "Significant wave height, Hs (m)", main = paste0(x$ARI, "-year ARI extreme Hs\nLatitude represents ", round(100 * x$r2_all, 1), "% of mapped variance"))
+  lines(x$pred$latitude, x$pred$fit, col = "purple", lwd = 3); abline(v = c(fit_min_lat, fit_max_lat), col = "grey40")
+  legend(
+    "topleft",
+    legend = c("5th", "25th", "Median", "75th", "95th", "Latitude-only model"),
+    lty = c(2, 3, 1, 3, 2, 1),
+    lwd = c(1.5, 1.5, 2.5, 1.5, 1.5, 3),
+    col = c("orange", "red", "black", "dodgerblue", "cyan3", "purple"),
+    ncol = 2,
+    bty = "n",
+    cex = 0.78
+  )
+}
+old_par <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2), mar = c(4.2, 4.2, 4.3, 1.0))
+for (x in results) plot_one_result(x)
+par(old_par)
+```
+
+# Where latitude works—and where it misses
+
+Read Figure 2 from top to bottom. The top row shows the full GEV-derived numerical-model estimate: this is the detailed offshore extreme-wave pattern. The middle row shows what the world would look like if latitude were the only control. The bottom row subtracts the middle from the top, revealing the extra geography represented by the numerical model.
+
+The left column shows the 1-year ARI and the right column shows the rarer 40-year ARI. All six maps use matching colour ranges so they can be compared directly, and they are masked outside the latitude range used to fit the model (`r fit_min_lat`° to `r fit_max_lat`°).
+
+The wave-height colour scale runs from 0 to 18 m in 1 m increments: blues show values below 5 m, yellows and reds show values from 5 to 11 m, and browns, purples and pinks show values above 11 m.
+
+<div class="plain-language-box" role="note">
+<div class="plain-language-icon" aria-hidden="true">i</div>
+<div class="plain-language-content">
+<span class="plain-language-title">In plain language</span>
+<p>The regional differences from the latitude-only pattern are generally smaller for the 1-year ARI than for the longer 40-year ARI, whose larger residuals are consistent with a stronger influence from regional extreme-generating systems such as tropical cyclones. Near coasts, shallow continental shelves can also impose a stronger depth limit on these larger waves, reducing significant wave height relative to the deep-water latitude-only expectation.</p>
+</div>
+</div>
+
+```{r static-map-comparison, fig.width=12, fig.height=10.5, fig.cap="Figure 2. Where latitude succeeds and where regional geography matters. The 1-year ARI is on the left and the 40-year ARI is on the right. The top row shows the full numerical-model estimate, the middle row shows the latitude-only benchmark, and the bottom row shows their difference. Red means the full model is higher than latitude alone would suggest; blue means it is lower. These coloured residual patterns highlight the influence of features such as fetch, basin shape, swell pathways and regional storm tracks, as represented by the numerical model."}
+old_par <- par(no.readonly = TRUE)
+par(
+  mfrow = c(3, 2),
+  mar = c(1.4, 1.3, 3.2, 3.8),
+  oma = c(0.3, 0.3, 0.8, 0.3)
+)
+
+# Top row: full GEV-derived numerical-model Hs.
+for (x in list(result_1yr, result_40yr)) {
+  plot(
+    x$Hs_map,
+    range = c(0, 18),
+    col = colzRamp(18),
+    axes = FALSE,
+    main = paste0("GEV-derived Hs\n", x$label)
+  )
+}
+
+# Middle row: latitude-only model.
+for (x in list(result_1yr, result_40yr)) {
+  plot(
+    x$latitude_model_map,
+    range = c(0, 18),
+    col = colzRamp(18),
+    axes = FALSE,
+    main = paste0("Latitude-only Hs\n", x$label)
+  )
+}
+
+# Bottom row: numerical-model Hs minus latitude-only Hs.
+for (x in list(result_1yr, result_40yr)) {
+  plot(
+    x$residual_map,
+    range = c(-10, 10),
+    col = residual_ramp(41),
+    axes = FALSE,
+    main = paste0("Difference: GEV-derived minus latitude-only\n", x$label)
+  )
+}
+
+par(old_par)
+```
+
+# What surfers and wave-watchers should take from this
+
+- **Latitude sets the broad background.** It places an ocean region within the global wind and storm belts, which is why one simple curve represents more than half of the mapped variance at both return periods.
+
+- **The same latitude does not mean the same wave climate.** Ocean width, exposure to prevailing storms, swell windows, land shelter and sea ice help explain why the percentile lines spread out and why the residual maps contain organised regional patterns.
+
+- **The 40-year value is a rarity level, not a schedule.** It describes a wave height with a low annual chance under the fitted model. It does not say when the event will happen, and it should not be read as a forecast.
+
+- **A red residual is not automatically a better surf spot.** It means the full numerical-model estimate is higher than the latitude-only benchmark. Surf quality also depends on direction, period, local wind, tide, bathymetry, refraction and how the waves break.
+
+- **The maps describe offshore significant wave height at a global-model scale.** They are useful for understanding the large-scale wave climate, but they do not replace a local forecast, buoy, bathymetric model or experienced reading of a particular break.
+
+Positive and negative residual patterns may reflect storm climatology, wind fetch, swell pathways, basin geometry and sea-ice treatment. They may also reflect the resolution, forcing and statistical choices of the numerical model and GEV analysis, so they should be treated as patterns to investigate rather than unquestioned physical truth.
+
+# Explore the maps yourself
+
+Use the radio buttons in the bottom-left corner to switch between the six layers. A useful sequence is to select a GEV layer, switch to the latitude layer for the same ARI, and then select its residual layer to see where the two differ. Only one data layer is displayed at a time. Pan and zoom to compare ocean basins, remembering that the map shows offshore $H_s$, not the final breaking wave at the coast.
+
+*Figure 3. Interactive version of the six fields in Figure 2. Choose a layer in the bottom-left, then pan and zoom to explore the regional pattern. The GEV and latitude layers use the wave-height colour key in metres. On the residual layers, red means the full model is higher than the latitude-only expectation and blue means it is lower.*
+
+```{r interactive-leaflet-map}
+if (knitr::is_html_output()) {
+  # The slight dateline crop prevents Leaflet projection/wrapping problems.
+  leaflet_crop_extent <- ext(rast(xmin = -179.5, xmax = 180))
+
+  prepare_hs_for_leaflet <- function(z) {
+    clamp(crop(z, leaflet_crop_extent), lower = 0, upper = 18)
+  }
+
+  prepare_residual_for_leaflet <- function(z) {
+    clamp(crop(z, leaflet_crop_extent), lower = -10, upper = 10)
+  }
+
+  aep_1_label  <- formatC(result_1yr$AEP, digits = 4, format = "f")
+  aep_40_label <- formatC(result_40yr$AEP, digits = 4, format = "f")
+
+  interactive_layers <- list(
+    prepare_hs_for_leaflet(result_1yr$Hs_map),
+    prepare_hs_for_leaflet(result_40yr$Hs_map),
+    prepare_hs_for_leaflet(result_1yr$latitude_model_map),
+    prepare_hs_for_leaflet(result_40yr$latitude_model_map),
+    prepare_residual_for_leaflet(result_1yr$residual_map),
+    prepare_residual_for_leaflet(result_40yr$residual_map)
+  )
+
+  names(interactive_layers) <- c(
+    paste0("GEV Hs: ARI 1 (AEP ", aep_1_label, ")"),
+    paste0("GEV Hs: ARI 40 (AEP ", aep_40_label, ")"),
+    paste0("Latitude Hs: ARI 1 (AEP ", aep_1_label, ")"),
+    paste0("Latitude Hs: ARI 40 (AEP ", aep_40_label, ")"),
+    paste0("Residual: ARI 1 (AEP ", aep_1_label, ")"),
+    paste0("Residual: ARI 40 (AEP ", aep_40_label, ")")
+  )
+
+  layer_groups <- names(interactive_layers)
+  hs_groups <- layer_groups[1:4]
+  residual_groups <- layer_groups[5:6]
+
+  hs_pal <- colorNumeric(
+    palette = colzRamp(18),
+    domain = c(0, 18),
+    na.color = "#00000000"
+  )
+
+  residual_pal <- colorNumeric(
+    palette = residual_ramp(41),
+    domain = c(-10, 10),
+    na.color = "#00000000"
+  )
+
+  interactive_map <- leaflet(
+    options = leafletOptions(
+      minZoom = 1,
+      worldCopyJump = FALSE
+    ),
+    width = "100%",
+    height = 650
+  )
+
+  interactive_map <- addProviderTiles(
+    interactive_map,
+    providers$Esri.WorldGrayCanvas,
+    options = providerTileOptions(noWrap = TRUE)
+  )
+
+  for (group_name in hs_groups) {
+    interactive_map <- addRasterImage(
+      interactive_map,
+      x = interactive_layers[[group_name]],
+      colors = hs_pal,
+      opacity = 0.82,
+      group = group_name,
+      project = TRUE,
+      method = "bilinear",
+      maxBytes = 8 * 1024 * 1024
+    )
+  }
+
+  for (group_name in residual_groups) {
+    interactive_map <- addRasterImage(
+      interactive_map,
+      x = interactive_layers[[group_name]],
+      colors = residual_pal,
+      opacity = 0.82,
+      group = group_name,
+      project = TRUE,
+      method = "bilinear",
+      maxBytes = 8 * 1024 * 1024
+    )
+  }
+
+  # Add only two colour keys: one shared by all Hs layers and one shared by
+  # both residual layers.
+  interactive_map <- addLegend(
+    interactive_map,
+    pal = hs_pal,
+    values = c(0, 18),
+    title = "Hs (m)",
+    opacity = 1,
+    position = "bottomright"
+  )
+
+  interactive_map <- addLegend(
+    interactive_map,
+    pal = residual_pal,
+    values = c(-10, 10),
+    title = "Residual Hs (m)",
+    opacity = 1,
+    position = "bottomright"
+  )
+
+  # baseGroups produces radio buttons, so only one raster is selected at a time.
+  interactive_map <- addLayersControl(
+    interactive_map,
+    baseGroups = layer_groups,
+    options = layersControlOptions(
+      collapsed = FALSE,
+      position = "bottomleft"
+    )
+  )
+
+  # Begin with the 1-year GEV-derived field displayed.
+  for (group_name in layer_groups[-1]) {
+    interactive_map <- hideGroup(interactive_map, group_name)
+  }
+
+  interactive_map <- addScaleBar(
+    interactive_map,
+    position = "topright",
+    options = scaleBarOptions(metric = TRUE, imperial = FALSE)
+  )
+
+  interactive_map <- fitBounds(
+    interactive_map,
+    lng1 = -179.5,
+    lat1 = fit_min_lat,
+    lng2 = 180,
+    lat2 = fit_max_lat
+  )
+
+  interactive_map
+} else {
+  cat("The interactive map is available in the HTML version of this report.")
+}
+```
+
+```{=html}
+<style>
+  .plain-language-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin: 1.25em 0;
+    padding: 16px 18px;
+    color: #173541;
+    background: #eaf7fb;
+    border: 1px solid #b8dfe8;
+    border-left: 6px solid #00a7c4;
+    border-radius: 7px;
+  }
+
+  .plain-language-icon {
+    display: flex;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-top: 1px;
+    color: white;
+    background: #087da8;
+    border-radius: 50%;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .plain-language-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.14em;
+    line-height: 1.5;
+  }
+
+  .plain-language-content p {
+    margin: 0;
+  }
+
+  .plain-language-title {
+    display: block;
+    margin-bottom: 0.2em;
+    font-size: 1.04em;
+    font-weight: 700;
+  }
+
+  .figure img {
+    cursor: zoom-in;
+  }
+
+  .figure img:focus {
+    outline: 3px solid #3498db;
+    outline-offset: 4px;
+  }
+
+  #plot-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 54px 28px 28px;
+    background: rgba(0, 0, 0, 0.9);
+  }
+
+  #plot-lightbox.is-open {
+    display: flex;
+  }
+
+  #plot-lightbox-image {
+    display: block;
+    max-width: 96vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    background: white;
+  }
+
+  #plot-lightbox-close {
+    position: absolute;
+    top: 10px;
+    right: 18px;
+    border: 0;
+    padding: 2px 12px 8px;
+    color: white;
+    background: transparent;
+    font-size: 42px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  #plot-lightbox-close:focus {
+    outline: 3px solid white;
+    outline-offset: 2px;
+  }
+</style>
+
+<div id="plot-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged figure" aria-hidden="true">
+  <button id="plot-lightbox-close" type="button" aria-label="Close enlarged figure">&times;</button>
+  <img id="plot-lightbox-image" alt="">
+</div>
+
+<script>
+(function () {
+  function initialisePlotLightbox() {
+    var lightbox = document.getElementById("plot-lightbox");
+    var enlargedImage = document.getElementById("plot-lightbox-image");
+    var closeButton = document.getElementById("plot-lightbox-close");
+    var previousFocus = null;
+
+    if (!lightbox || !enlargedImage || !closeButton) return;
+
+    function openLightbox(sourceImage) {
+      previousFocus = sourceImage;
+      enlargedImage.src = sourceImage.src;
+      enlargedImage.alt = sourceImage.alt || "Enlarged figure";
+      lightbox.classList.add("is-open");
+      lightbox.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      closeButton.focus();
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove("is-open");
+      lightbox.setAttribute("aria-hidden", "true");
+      enlargedImage.removeAttribute("src");
+      document.body.style.overflow = "";
+      if (previousFocus) previousFocus.focus();
+    }
+
+    document.querySelectorAll(".figure img").forEach(function (image) {
+      image.setAttribute("tabindex", "0");
+      image.setAttribute("role", "button");
+      image.setAttribute("aria-label", "Enlarge figure: " + (image.alt || "plot"));
+
+      image.addEventListener("click", function () {
+        openLightbox(image);
+      });
+
+      image.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openLightbox(image);
+        }
+      });
+    });
+
+    closeButton.addEventListener("click", closeLightbox);
+
+    lightbox.addEventListener("click", function (event) {
+      if (event.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && lightbox.classList.contains("is-open")) {
+        closeLightbox();
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialisePlotLightbox);
+  } else {
+    initialisePlotLightbox();
+  }
+})();
+</script>
+```
+
+# Looking ahead: a changing global circulation
+
+Global atmospheric circulation patterns are changing as the climate warms; for example, the joint CSIRO and Bureau of Meteorology [*State of the Climate 2024*](https://www.csiro.au/-/media/Environment/SOTC-2024/State-of-the-Climate-2024-Accessible-version.html) reports climate-related changes in atmospheric pressure and high-pressure systems across southern Australia. Because wave climates respond to the position and strength of wind belts, storm tracks and tropical-cyclone activity, these changes could alter both the fitted latitude relationship and the regional residual patterns. This does not invalidate the historical analysis, but its results should not be assumed to remain fixed: future applications should rerun the method using updated observations or future-climate wave-model projections.
+
+# Where the wave numbers come from
+
+The analysis uses a global set of extreme-value parameters derived from the CAWCR numerical wave model. It is not a live forecast, a direct buoy record or a surf-spot model. The code downloads `CAWCR_GEVparameters.nc` from the CSIRO THREDDS server:
+
+<https://data-cbr.csiro.au/thredds/fileServer/catch_all/OA_SLE_archive/COWCLIP/EXTREMES/EVA_R/CSIRO_withMidCentury/CAWCR_GEVparameters.nc>
+
+Direct input-file citation: CSIRO. (n.d.). *CAWCR_GEVparameters.nc* [NetCDF data file]. COWCLIP / EXTREMES / EVA_R / CSIRO_withMidCentury. Retrieved 17 August 2026 from the URL above.
+
+The broader processed global extreme-wave data collection and methodology relevant to this input should also be cited as follows:
+
+O'Grady, J. G., Hemer, M. A., McInnes, K. L., Trenham, C. E., Stephenson, A. G., & Seers, B. (2021). *Projected incremental changes to extreme wind-driven wave heights for the twenty-first century* (Version 1) [Data collection]. CSIRO. <https://doi.org/10.25919/82cw-8w26>
+
+O'Grady, J. G., Hemer, M. A., McInnes, K. L., Trenham, C. E., Stephenson, A. G., & Seers, B. (2021). Projected incremental changes to extreme wind-driven wave heights for the twenty-first century. *Scientific Reports, 11*, 8826. <https://doi.org/10.1038/s41598-021-87358-w>
+
+The CAWCR global wave model is documented separately by Smith et al. (2020), who describe the global hindcast, its forcing and spatial resolution: <https://doi.org/10.1002/gdj3.104>.
+
+# Export the latitude-percentile figures (technical)
+
+```{r save-png}
+for (x in results) {
+  png_file <- paste0("Hs_ARI_", x$ARI, "yr_percentiles_by_latitude_all_cells_cosine_fit.png")
+  grDevices::png(png_file, width = 1500, height = 950, res = 130)
+  plot_one_result(x)
+  grDevices::dev.off()
+  cat("Saved figure: ", png_file, "\n", sep = "")
+}
+```
+
+# Limits and reproducibility notes
+
+- The results describe offshore significant wave height at the model grid scale, not breaking-wave face height or surf quality at an individual beach or reef.
+- The raster contains GEV parameters rather than direct observations. The report should therefore describe `Glob_Hs` as a **GEV-derived numerical-model estimate**.
+- The first three NetCDF layers are assumed to be GEV location, scale and shape parameters. Confirm this from the source metadata before applying the analysis to a differently versioned file.
+
+Future analysis could test whether the residual patterns are associated with tropical-cyclone track exposure, distance from the coast or bathymetric depth.
