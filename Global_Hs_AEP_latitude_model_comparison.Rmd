@@ -528,6 +528,421 @@ if (knitr::is_html_output()) {
 }
 ```
 
+## Spin the same layers on a 3D globe
+
+The globe uses the same six masked rasters and the same colour scales as the flat map above. Choose the GEV-derived field, latitude-only model or residual, then switch between the 1-year and 40-year ARIs. Drag to rotate the globe, use the mouse wheel or trackpad to zoom, and pause or restart the automatic spin with the button.
+
+*Figure 4. Interactive 3D view of the same wave-height fields. The coloured ocean surface is restricted to the latitude range used for fitting. Grey areas are land or locations outside that fitted range. The legend changes automatically between significant wave height and residual wave height.*
+
+```{r interactive-threejs-globe, results='asis'}
+if (knitr::is_html_output()) {
+  stopifnot(exists("interactive_map"), length(layer_groups) == 6)
+
+  globe_id <- paste0("wave-globe-", sprintf("%08x", sample.int(.Machine$integer.max, 1)))
+
+  globe_config <- list(
+    rootId = globe_id,
+    groups = stats::setNames(
+      as.list(layer_groups),
+      c("gev-1", "gev-40", "latitude-1", "latitude-40", "residual-1", "residual-40")
+    ),
+    palettes = list(
+      hs = unname(colzRamp(18)),
+      residual = unname(residual_ramp(41))
+    ),
+    fitLatitude = c(fit_min_lat, fit_max_lat)
+  )
+
+  globe_css <- paste0(
+    "#", globe_id, " { position: relative; width: 100%; min-height: 650px; overflow: hidden; background: #eeeeee; border: 1px solid #c7c7c7; border-radius: 6px; }\n",
+    "#", globe_id, " .wave-globe-canvas { display: block; width: 100%; height: 650px; cursor: grab; touch-action: none; }\n",
+    "#", globe_id, " .wave-globe-canvas:active { cursor: grabbing; }\n",
+    "#", globe_id, " .wave-globe-controls { position: absolute; z-index: 2; top: 12px; left: 12px; max-width: calc(100% - 24px); padding: 10px; color: #263238; background: rgba(255,255,255,0.92); border: 1px solid rgba(70,70,70,0.28); border-radius: 5px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }\n",
+    "#", globe_id, " .wave-globe-control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 7px; }\n",
+    "#", globe_id, " .wave-globe-control-row:last-child { margin-bottom: 0; }\n",
+    "#", globe_id, " .wave-globe-label { min-width: 48px; font-size: 13px; font-weight: 700; }\n",
+    "#", globe_id, " button { padding: 5px 9px; color: #263238; background: #f7f7f7; border: 1px solid #8a9a9e; border-radius: 4px; font: inherit; font-size: 13px; cursor: pointer; }\n",
+    "#", globe_id, " button:hover { background: #e7f3f7; }\n",
+    "#", globe_id, " button.is-active { color: #ffffff; background: #087da8; border-color: #087da8; }\n",
+    "#", globe_id, " button:focus-visible { outline: 3px solid #45a9d1; outline-offset: 2px; }\n",
+    "#", globe_id, " .wave-globe-status { max-width: 410px; font-size: 12px; }\n",
+    "#", globe_id, " .wave-globe-legend { position: absolute; z-index: 2; right: 12px; bottom: 12px; width: min(280px, calc(100% - 24px)); padding: 9px 10px; color: #263238; background: rgba(255,255,255,0.92); border: 1px solid rgba(70,70,70,0.28); border-radius: 5px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }\n",
+    "#", globe_id, " .wave-globe-legend-title { margin-bottom: 5px; font-size: 13px; font-weight: 700; }\n",
+    "#", globe_id, " .wave-globe-legend-bar { height: 14px; border: 1px solid rgba(40,40,40,0.45); }\n",
+    "#", globe_id, " .wave-globe-legend-ticks { display: flex; justify-content: space-between; margin-top: 3px; font-size: 12px; }\n",
+    "@media (max-width: 600px) { #", globe_id, " { min-height: 590px; } #", globe_id, " .wave-globe-canvas { height: 590px; } #", globe_id, " .wave-globe-controls { right: 12px; } }\n"
+  )
+
+  globe_markup <- htmltools::tagList(
+    htmltools::tags$style(htmltools::HTML(globe_css)),
+    htmltools::tags$div(
+      id = globe_id,
+      class = "wave-globe-shell",
+      markdown = "0",
+      htmltools::tags$div(
+        class = "wave-globe-controls",
+        htmltools::tags$div(
+          class = "wave-globe-control-row",
+          htmltools::tags$span(class = "wave-globe-label", "Layer"),
+          htmltools::tags$button(type = "button", class = "wave-model is-active", `data-model` = "gev", `aria-pressed` = "true", "GEV-derived"),
+          htmltools::tags$button(type = "button", class = "wave-model", `data-model` = "latitude", `aria-pressed` = "false", "Latitude-only"),
+          htmltools::tags$button(type = "button", class = "wave-model", `data-model` = "residual", `aria-pressed` = "false", "Residual")
+        ),
+        htmltools::tags$div(
+          class = "wave-globe-control-row",
+          htmltools::tags$span(class = "wave-globe-label", "ARI"),
+          htmltools::tags$button(type = "button", class = "wave-ari is-active", `data-ari` = "1", `aria-pressed` = "true", "1 year"),
+          htmltools::tags$button(type = "button", class = "wave-ari", `data-ari` = "40", `aria-pressed` = "false", "40 years"),
+          htmltools::tags$button(type = "button", class = "wave-spin", `aria-pressed` = "true", "Pause spin")
+        ),
+        htmltools::tags$div(class = "wave-globe-status", `aria-live` = "polite", "Loading 3D globe...")
+      ),
+      htmltools::tags$canvas(
+        class = "wave-globe-canvas",
+        role = "img",
+        `aria-label` = "Interactive spinning globe showing modelled extreme significant wave height"
+      ),
+      htmltools::tags$div(
+        class = "wave-globe-legend",
+        htmltools::tags$div(class = "wave-globe-legend-title", "Significant wave height, Hs (m)"),
+        htmltools::tags$div(class = "wave-globe-legend-bar"),
+        htmltools::tags$div(
+          class = "wave-globe-legend-ticks",
+          htmltools::tags$span("0"),
+          htmltools::tags$span("5"),
+          htmltools::tags$span("11"),
+          htmltools::tags$span("18")
+        )
+      )
+    )
+  )
+
+  globe_javascript <- paste0(
+    "const waveGlobeConfig = ",
+    jsonlite::toJSON(globe_config, auto_unbox = TRUE, null = "null"),
+    ";\n",
+    r"---(
+const root = document.getElementById(waveGlobeConfig.rootId);
+
+if (root) {
+  const canvas = root.querySelector(".wave-globe-canvas");
+  const status = root.querySelector(".wave-globe-status");
+  const legendTitle = root.querySelector(".wave-globe-legend-title");
+  const legendBar = root.querySelector(".wave-globe-legend-bar");
+  const legendTicks = root.querySelector(".wave-globe-legend-ticks");
+  const spinButton = root.querySelector(".wave-spin");
+
+  const state = {
+    model: "gev",
+    ari: "1",
+    spinning: !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  };
+
+  if (!state.spinning) {
+    spinButton.textContent = "Start spin";
+    spinButton.setAttribute("aria-pressed", "false");
+  }
+
+  function findLeafletRasters() {
+    const expectedGroups = Object.values(waveGlobeConfig.groups);
+    const widgetScripts = Array.from(document.querySelectorAll("script[data-for]"));
+
+    for (const script of widgetScripts) {
+      let payload;
+      try {
+        payload = JSON.parse(script.textContent);
+      } catch (error) {
+        continue;
+      }
+
+      const calls = payload && payload.x && Array.isArray(payload.x.calls)
+        ? payload.x.calls
+        : [];
+      const rasterCalls = calls.filter(call => call.method === "addRasterImage");
+      const byGroup = new Map();
+
+      rasterCalls.forEach(call => {
+        if (call.args && call.args.length >= 4) {
+          byGroup.set(call.args[3], {
+            uri: call.args[0],
+            bounds: call.args[1]
+          });
+        }
+      });
+
+      if (expectedGroups.every(group => byGroup.has(group))) {
+        return byGroup;
+      }
+    }
+
+    throw new Error("The raster layers from the Leaflet map could not be found.");
+  }
+
+  function paletteGradient(colours) {
+    return "linear-gradient(to right, " + colours.join(", ") + ")";
+  }
+
+  function setLegend() {
+    const residual = state.model === "residual";
+    legendTitle.textContent = residual
+      ? "Residual wave height (m)"
+      : "Significant wave height, Hs (m)";
+    legendBar.style.background = paletteGradient(
+      residual ? waveGlobeConfig.palettes.residual : waveGlobeConfig.palettes.hs
+    );
+    legendTicks.innerHTML = residual
+      ? "<span>-10</span><span>-5</span><span>0</span><span>5</span><span>10</span>"
+      : "<span>0</span><span>5</span><span>11</span><span>18</span>";
+  }
+
+  function setPressed(buttons, activeButton) {
+    buttons.forEach(button => {
+      const active = button === activeButton;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  try {
+    const rastersByGroup = findLeafletRasters();
+    const THREE = await import("https://esm.sh/three@0.169.0");
+    const controlsModule = await import("https://esm.sh/three@0.169.0/examples/jsm/controls/OrbitControls.js");
+    const OrbitControls = controlsModule.OrbitControls;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setClearColor(0xeeeeee, 1);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    camera.position.set(0, 0.15, 3.35);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = false;
+    controls.minDistance = 2.15;
+    controls.maxDistance = 6.0;
+
+    const globeGroup = new THREE.Group();
+    globeGroup.rotation.y = THREE.MathUtils.degToRad(125);
+    scene.add(globeGroup);
+
+    const baseSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 128, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0xd2d2d2,
+        roughness: 0.92,
+        metalness: 0
+      })
+    );
+    globeGroup.add(baseSphere);
+
+    const overlayMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.96,
+      depthWrite: false
+    });
+    const overlaySphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1.006, 128, 64),
+      overlayMaterial
+    );
+    globeGroup.add(overlaySphere);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.55));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.05);
+    keyLight.position.set(3, 2, 4);
+    scene.add(keyLight);
+
+    function latitudeToPoint(latitude, longitude, radius) {
+      const phi = THREE.MathUtils.degToRad(90 - latitude);
+      const theta = THREE.MathUtils.degToRad(longitude + 180);
+      return new THREE.Vector3(
+        -radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.cos(phi),
+        radius * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    const gridMaterial = new THREE.LineBasicMaterial({
+      color: 0x8f8f8f,
+      transparent: true,
+      opacity: 0.34
+    });
+
+    for (let latitude = -60; latitude <= 60; latitude += 30) {
+      const points = [];
+      for (let longitude = -180; longitude <= 180; longitude += 2) {
+        points.push(latitudeToPoint(latitude, longitude, 1.012));
+      }
+      globeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
+    }
+
+    for (let longitude = -150; longitude < 180; longitude += 30) {
+      const points = [];
+      for (let latitude = -90; latitude <= 90; latitude += 2) {
+        points.push(latitudeToPoint(latitude, longitude, 1.012));
+      }
+      globeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
+    }
+
+    const textureCache = new Map();
+
+    function mercatorY(latitude) {
+      const limited = Math.max(-85.05112878, Math.min(85.05112878, latitude));
+      const radians = THREE.MathUtils.degToRad(limited);
+      return Math.log(Math.tan(Math.PI / 4 + radians / 2));
+    }
+
+    async function makeEquirectangularTexture(raster) {
+      if (textureCache.has(raster.uri)) return textureCache.get(raster.uri);
+
+      const image = new Image();
+      image.src = raster.uri;
+      await image.decode();
+
+      const textureCanvas = document.createElement("canvas");
+      textureCanvas.width = 1440;
+      textureCanvas.height = 720;
+      const context = textureCanvas.getContext("2d");
+      context.clearRect(0, 0, textureCanvas.width, textureCanvas.height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+
+      const flatBounds = raster.bounds.flat ? raster.bounds.flat() : [].concat(...raster.bounds);
+      const north = Number(flatBounds[0]);
+      const south = Number(flatBounds[2]);
+      const mercatorNorth = mercatorY(north);
+      const mercatorSouth = mercatorY(south);
+
+      for (let outputY = 0; outputY < textureCanvas.height; outputY += 1) {
+        const latitude = 90 - 180 * ((outputY + 0.5) / textureCanvas.height);
+        if (latitude > north || latitude < south) continue;
+
+        const sourceFraction = (mercatorNorth - mercatorY(latitude)) /
+          (mercatorNorth - mercatorSouth);
+        const sourceY = Math.max(
+          0,
+          Math.min(image.height - 1, Math.floor(sourceFraction * image.height))
+        );
+        context.drawImage(
+          image,
+          0,
+          sourceY,
+          image.width,
+          1,
+          0,
+          outputY,
+          textureCanvas.width,
+          1
+        );
+      }
+
+      const texture = new THREE.CanvasTexture(textureCanvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      texture.needsUpdate = true;
+      textureCache.set(raster.uri, texture);
+      return texture;
+    }
+
+    function currentConfigKey() {
+      return state.model + "-" + state.ari;
+    }
+
+    async function updateLayer() {
+      const configKey = currentConfigKey();
+      const groupName = waveGlobeConfig.groups[configKey];
+      const raster = rastersByGroup.get(groupName);
+
+      status.textContent = "Loading " + groupName + "...";
+      overlayMaterial.map = await makeEquirectangularTexture(raster);
+      overlayMaterial.needsUpdate = true;
+      setLegend();
+      status.textContent = groupName;
+    }
+
+    root.querySelectorAll(".wave-model").forEach(button => {
+      button.addEventListener("click", async () => {
+        state.model = button.dataset.model;
+        setPressed(root.querySelectorAll(".wave-model"), button);
+        await updateLayer();
+      });
+    });
+
+    root.querySelectorAll(".wave-ari").forEach(button => {
+      button.addEventListener("click", async () => {
+        state.ari = button.dataset.ari;
+        setPressed(root.querySelectorAll(".wave-ari"), button);
+        await updateLayer();
+      });
+    });
+
+    spinButton.addEventListener("click", () => {
+      state.spinning = !state.spinning;
+      spinButton.textContent = state.spinning ? "Pause spin" : "Start spin";
+      spinButton.setAttribute("aria-pressed", state.spinning ? "true" : "false");
+    });
+
+    function resizeRenderer() {
+      const width = Math.max(1, canvas.clientWidth);
+      const height = Math.max(1, canvas.clientHeight);
+      const pixelRatio = renderer.getPixelRatio();
+      const requiredWidth = Math.floor(width * pixelRatio);
+      const requiredHeight = Math.floor(height * pixelRatio);
+
+      if (canvas.width !== requiredWidth || canvas.height !== requiredHeight) {
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(resizeRenderer);
+    resizeObserver.observe(root);
+
+    await updateLayer();
+
+    let previousTime = performance.now();
+    function animate(now) {
+      const elapsedSeconds = Math.min(0.05, (now - previousTime) / 1000);
+      previousTime = now;
+      resizeRenderer();
+      controls.update();
+      if (state.spinning) globeGroup.rotation.y += elapsedSeconds * 0.10;
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  } catch (error) {
+    status.textContent = "The 3D globe could not be loaded: " + error.message;
+    console.error(error);
+  }
+}
+)---"
+  )
+
+  full_globe_markup <- htmltools::tagList(
+    globe_markup,
+    htmltools::tags$script(
+      type = "module",
+      htmltools::HTML(globe_javascript)
+    )
+  )
+
+  # htmltools indents nested tags when converting them to text. Pandoc can
+  # interpret those indented child tags as Markdown code blocks, which prints
+  # the controls as literal HTML. Collapse whitespace between tags so the
+  # complete widget is passed through as raw HTML.
+  globe_html <- paste(as.character(full_globe_markup), collapse = "")
+  globe_html <- gsub(">\\s+<", "><", globe_html, perl = TRUE)
+  cat(globe_html, "\n")
+} else {
+  cat("The interactive 3D globe is available in the HTML version of this report.")
+}
+```
+
 ```{=html}
 <style>
   .plain-language-box {
