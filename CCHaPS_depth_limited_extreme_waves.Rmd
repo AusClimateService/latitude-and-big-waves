@@ -203,6 +203,8 @@ The analysis compares two event sizes:
 
 It then replaces the full numerical wave model with a deliberately simple model that knows only local water depth and latitude. Depth represents the shallow-water constraint, while latitude provides a first-order guide to Australia's broad north–south storm climate. Comparing the simple model with CCHaPS shows what these two controls can explain and what they miss.
 
+Much of the remaining structured variance reflects physics that is represented by numerical wave modelling but absent from this two-predictor relationship. CCHaPS accounts for processes such as wind input, swell propagation, shoaling, refraction, sheltering by coasts and reefs, wave–current interaction, bottom friction, whitecapping and depth-induced breaking. Regional storm tracks and tropical cyclones also change the wave field arriving at each shelf. The residuals therefore show where the full process-based model departs from what water depth and latitude alone would predict.
+
 ## A quick guide to the jargon of an ocean-wave climate scientist
 
 | Term | Plain-language meaning |
@@ -237,24 +239,6 @@ CCHaPS does not impose the simple equation above as its final answer. Its WWMIII
 <strong>In plain language</strong>
 A very large individual wave cannot remain that large when there is too little water beneath it: it steepens, breaks and loses energy. In a storm, however, only part of the full distribution of waves may be breaking at once. Significant wave height summarises the whole sea state, so its depth limit is not identical to the limit for the single largest wave. Depth is also not the whole story—two places with the same depth can experience very different waves because their storm exposure, fetch, sheltering and incoming swell are different.
 </div>
-
-## Is the depth limiter related to the Dean beach profile?
-
-There is a useful conceptual link, but the two relationships describe different things. The [Dean equilibrium beach profile](https://journals.flvc.org/jcr/article/view/78405) represents an idealised sandy cross-shore profile as
-
-\[
-h(x) = A x^{2/3},
-\]
-
-where $x$ is horizontal distance seaward from the shoreline and $A$ is a dimensional profile-scale parameter related to the sediment and equilibrium profile. It describes how **water depth changes with cross-shore distance**; it is not itself a wave-height equation.
-
-If the local limiting wave height is approximated as $H_{\mathrm{lim}} \approx \gamma h$, the two ideas can be combined:
-
-\[
-H_{\mathrm{lim}}(x) \approx \gamma A x^{2/3}.
-\]
-
-This says that a Dean-like profile can help locate how the depth-limited wave ceiling changes shoreward. It does **not** mean that the national fitted depth coefficient below should equal $2/3$. The CCHaPS nodes span shelves, gulfs, banks, reefs and many non-equilibrium settings, and this analysis does not use shore-normal distance or estimate $A$. Testing the Dean connection directly would require beach-scale cross-shore transects, local sediment or fitted $A$, and comparable offshore wave forcing. Dean's formulation and applications are described in [Dean (1991)](https://journals.flvc.org/jcr/article/download/78405/75816/).
 
 # The CCHaPS model and data
 
@@ -799,7 +783,7 @@ The upper edge of the point cloud rises with depth because deeper water can supp
 
 The ratio $H_s/h$ is useful for comparing the event height with the water beneath it. It is **not** a universal breaking threshold, but larger ratios indicate that the modelled sea state occupies a larger share of the available depth and is more likely to be affected by shallow-water processes.
 
-```{r depth-ratio, echo=FALSE, fig.width=9.5, fig.height=5.4, fig.cap="Figure 2. Median significant-wave-height-to-depth ratio within logarithmically spaced depth bands. The ratio generally falls as water becomes deeper. The 40-year event occupies more of the available depth than the 1-year event, so depth limitation is expected to matter more strongly for the rarer, larger waves."}
+```{r depth-ratio, echo=FALSE, fig.width=9.5, fig.height=5.4, fig.cap="Figure 2. Median significant-wave-height-to-depth ratio within logarithmically spaced depth bands. Both axes are logarithmic. The ratio generally falls as water becomes deeper. The 40-year event occupies more of the available depth than the 1-year event, so depth limitation is expected to matter more strongly for the rarer, larger waves."}
 depth_edges <- 10^seq(
   log10(params$minimum_depth_m),
   log10(params$maximum_depth_m),
@@ -1053,7 +1037,7 @@ draw_shared_colour_bar <- function(
 }
 ```
 
-```{r fitted-depth-map, echo=FALSE, fig.width=10.5, fig.height=7.8, fig.cap="Figure 3. Average CCHaPS water depth across the fitted domain. Pale colours show shallow banks and inner shelves; darker blues show the deeper part of the fitted continental shelf. Areas outside the selected depth range are excluded from the analysis."}
+```{r fitted-depth-map, echo=FALSE, fig.width=10.5, fig.height=7.8, fig.cap="Figure 3. Average CCHaPS water depth across the fitted domain. Pale colours show shallow banks and inner shelves; darker blues show the deeper part of the fitted continental shelf. Areas outside the selected depth range are excluded from the analysis. This map has no logarithmic axis or colour transformation: depth is shown in linear 5 m intervals."}
 depth_breaks <- seq(0, params$maximum_depth_m, by = 5)
 depth_colours <- rev(
   grDevices::hcl.colors(length(depth_breaks) - 1, "YlGnBu")
@@ -1085,7 +1069,7 @@ layout(1)
 par(old_par)
 ```
 
-```{r six-panel-map, echo=FALSE, fig.width=12, fig.height=15.5, fig.cap="Figure 4. Extreme significant wave height across the fitted shelf-depth range. Columns compare the 1-year ARI (left) with the 40-year ARI (right). The top row is the full CCHaPS estimate, the middle row is the depth-and-latitude model, and the bottom row is the residual (CCHaPS minus the simple model). The two shared colour bars apply to the four wave-height panels and two residual panels, respectively."}
+```{r six-panel-map, echo=FALSE, fig.width=12, fig.height=15.5, fig.cap="Figure 4. Extreme significant wave height across the fitted shelf-depth range. Columns compare the 1-year ARI (left) with the 40-year ARI (right). The top row is the full CCHaPS estimate, the middle row is the depth-and-latitude model, and the bottom row is the residual (CCHaPS minus the simple model). The two shared colour bars apply to the four wave-height panels and two residual panels, respectively. The mapped wave heights and residuals are untransformed values in metres on linear colour scales; no logarithmic axis or colour transformation is used."}
 old_par <- par(no.readonly = TRUE)
 layout(
   matrix(
@@ -1291,7 +1275,7 @@ depth_map |>
   leaflet::hideGroup(interactive_groups[-1]) |>
   leaflet::addLayersControl(
     baseGroups = interactive_groups,
-    position = "bottomleft",
+    position = "bottomright",
     options = leaflet::layersControlOptions(collapsed = FALSE)
   ) |>
   leaflet::addLegend(
@@ -1302,7 +1286,7 @@ depth_map |>
     opacity = 0.9
   ) |>
   leaflet::addLegend(
-    position = "bottomright",
+    position = "bottomleft",
     pal = residual_palette,
     values = residual_breaks,
     title = htmltools::HTML("CCHaPS − depth +<br>latitude (m)"),
@@ -1325,11 +1309,28 @@ Blue areas are clearly sheltered or fetch-limited environments where CCHaPS esti
 
 Future analysis could separate the depth effect more cleanly by including offshore wave exposure, tropical-cyclone tracks, distance from the coast, shelf width, bathymetric slope, coastline orientation and fetch. A particularly useful next step would compare nodes with similar offshore wave forcing and latitude but different local depth.
 
+# Where does the depth-limited wave energy go?
+
+Depth-induced breaking removes energy from the short-period wind-wave spectrum, but “dissipated” does not mean that all of the lost energy reappears in one other wave component. Much of it becomes breaking-generated turbulence and is ultimately converted to heat. At the same time, the shoreward reduction in wave momentum flux—usually described through radiation-stress gradients—changes mean water level through wave setup and forces cross-shore, rip and longshore currents. The foundations of these momentum transfers are described by [Longuet-Higgins and Stewart (1962)](https://doi.org/10.1017/S0022112062000877), with a classic longshore-current application in [Longuet-Higgins (1970)](https://doi.org/10.1029/JC075i033p06778).
+
+Wave groups also create slow variations in wave energy and radiation stress. Bound long waves accompany the groups outside the surf zone. As the groups shoal and break, the moving breakpoint and group-varying breaking can generate or release free infragravity waves, observed as **surf beat**. [Symonds, Huntley and Bowen (1982)](https://doi.org/10.1029/JC087iC01p00492) describe this moving-breakpoint mechanism. It is an important pathway for transferring and generating low-frequency motion, but it does not imply that all short-wave energy lost during breaking becomes infragravity-wave energy.
+
+Breaking turbulence, wave orbital motion and wave-driven currents can also mobilise the seabed. Sediment may move as bedload close to the bed or as suspended load in the water column. Spatial differences in that transport can build or erode bars, rip channels, ripples and other bedforms, altering the bathymetry that controls later waves. Models such as [XBeach](https://doi.org/10.1016/j.coastaleng.2009.08.006) couple wave groups and infragravity motion with currents, sediment transport and bed evolution for storm-impact studies. Currents and sediment transport should not, however, be treated as simple energy “bins”: the partition depends on wave period and angle, beach slope, water depth, sediment properties and the evolving morphology, while most broken-wave energy still cascades through turbulence to heat.
+
+<div class="plain-language">
+<strong>In plain language</strong>
+A breaking storm wave does not simply turn into a long wave, a current or moving sand. Breaking removes energy from the ordinary wind waves, creates turbulence and changes the force that the waves exert on the water. Those changes can raise the mean water level, drive longshore and rip currents, generate slow surf-beat or infragravity waves, and move large quantities of bed and suspended sediment. These linked responses can reshape bars and channels, while much of the original wave energy is eventually lost as heat.
+</div>
+
+CCHaPS is a national, phase-averaged circulation-and-wave model. It represents bulk wave transformation and depth-induced breaking, but it is not intended to resolve each individual breaker, beach-scale infragravity motion or storm-driven bedform evolution. A future local analysis could combine CCHaPS offshore boundary conditions with observations and a finer surf-zone or morphodynamic model to track these energy and momentum pathways explicitly.
+
 # Looking ahead: sea-level rise and changing storms
 
 Sea-level rise increases the water depth over reefs, banks and shallow shelves. Where waves are currently depth limited, additional depth may allow larger waves to travel farther shoreward before breaking. The response will not be a simple one-for-one increase because wave period, bottom friction, currents, changing storm tracks and changing offshore wave climate also matter.
 
 This historical relationship should therefore not be assumed to remain fixed. A future version could repeat the analysis with the CCHaPS climate projections and separate the effects of changing water depth from changes in wind, storms and incoming wave spectra.
+
+A further analysis could test the conceptual connection with the [Dean equilibrium beach profile](https://journals.flvc.org/jcr/article/view/78405), $h(x)=Ax^{2/3}$. If a local limiting wave height is approximated as $H_{\mathrm{lim}}\approx\gamma h$, then a Dean-like beach profile implies $H_{\mathrm{lim}}(x)\approx\gamma A x^{2/3}$. This would describe how a depth-limited wave ceiling changes with cross-shore distance; it would not imply that the national fitted depth exponent must equal $2/3$. A direct test would require shore-normal beach transects, distance from the coast, local sediment information or a fitted $A$, and comparable offshore wave forcing. The present nodes span shelves, gulfs, banks, reefs and non-equilibrium settings, so this report does not estimate $A$ or test the Dean exponent. The formulation and its applications are described further by [Dean (1991)](https://journals.flvc.org/jcr/article/download/78405/75816/).
 
 # Limits and reproducibility notes
 
