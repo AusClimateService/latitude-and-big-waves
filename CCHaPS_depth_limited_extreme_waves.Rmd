@@ -1,9 +1,11 @@
 ---
-title: "Shallow Water, Smaller Waves: How Depth Limits Australia's Biggest Storm Waves"
-subtitle: "A simple CCHaPS model of depth, latitude and 1-year and 40-year extreme significant wave heights"
+title: 'Shallow Water, Smaller Waves: How Depth Limits Australia''s Biggest Storm
+  Waves'
 author: "Julian O'Grady"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
+  word_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
@@ -12,6 +14,8 @@ output:
     theme: flatly
     highlight: tango
     fig_caption: true
+subtitle: "A simple CCHaPS model of depth, latitude and 1-year and 40-year extreme
+  significant wave heights"
 params:
   datadir: "C:/Users/ogr013/OneDrive - CSIRO/Documents/ACS_NCRA/schism/"
   minimum_depth_m: 0.5
