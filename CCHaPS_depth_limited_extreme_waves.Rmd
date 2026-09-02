@@ -4,8 +4,6 @@ title: 'Shallow Water, Smaller Waves: How Depth Limits Australia''s Biggest Stor
 author: "Julian O'Grady"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
-  word_document:
-    toc: true
   html_document:
     toc: true
     toc_float: true
@@ -14,6 +12,8 @@ output:
     theme: flatly
     highlight: tango
     fig_caption: true
+  word_document:
+    toc: true
 subtitle: "A simple CCHaPS model of depth, latitude and 1-year and 40-year extreme
   significant wave heights"
 params:
@@ -41,7 +41,8 @@ knitr::opts_chunk$set(
 )
 
 required_packages <- c(
-  "terra", "ncdf4", "loopevd", "parallel", "leaflet", "htmltools", "knitr"
+  "terra", "ncdf4", "loopevd", "parallel", "leaflet", "htmltools",
+  "htmlwidgets", "knitr"
 )
 
 missing_packages <- required_packages[
@@ -172,10 +173,38 @@ input_files <- list(
 .main-container img:not(.leaflet-tile) { cursor: zoom-in; }
 .leaflet-container img { cursor: inherit !important; }
 .leaflet-control-layers,
-.leaflet-control-layers label,
-.leaflet-control.legend {
+.leaflet-control-layers label {
   font-size: 14px;
   line-height: 1.28;
+}
+.cchaps-dynamic-legend {
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 5px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+  color: #333;
+  line-height: 1.18;
+  max-height: 72vh;
+  min-width: 128px;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+.cchaps-legend-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.cchaps-legend-row {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  min-height: 16px;
+  white-space: nowrap;
+}
+.cchaps-legend-swatch {
+  display: inline-block;
+  flex: 0 0 18px;
+  height: 15px;
 }
 .caption-note {
   color: #4f5c65;
@@ -190,24 +219,20 @@ input_files <- list(
 
 # From the global wave climate to Australia's shallow shelves {.unnumbered}
 
-This regional analysis follows the companion explainer [`Global_Hs_AEP_latitude_model_comparison.Rmd`](https://ausclimateservice.github.io/latitude-and-big-waves/Global_Hs_AEP_latitude_model_comparison.html), which asks how much of the global pattern of extreme significant wave height can be represented by latitude alone. That global analysis found that a smooth latitude-only relationship represented more than half of the mapped variation for both the 1-year and 40-year ARIs. Latitude therefore captures an important first-order control: the broad organisation of wind belts, storm tracks and tropical versus mid-latitude wave climates.
+# Why are Australia's biggest storm waves smaller in shallow water?
 
-The global maps also showed substantial differences between places at the same latitude. Ocean-basin width, storm exposure, swell pathways, land shelter and regional extreme-generating systems create organised residual patterns that latitude cannot represent. Those differences were generally larger for the 40-year ARI. Near coasts, some negative residuals were also consistent with shallow continental shelves limiting the larger incoming waves.
+This regional analysis follows the companion explainer, [*A World of Waves: Why Latitude Explains So Much About the Biggest Waves—but Not Everything*](https://ausclimateservice.github.io/latitude-and-big-waves/Global_Hs_AEP_latitude_model_comparison.html).
 
-This report takes that final observation as its starting point. It moves from a global, smooth latitude relationship to the much finer Australian CCHaPS mesh and asks how local water depth changes the regional pattern. The latitude term used below is deliberately linear over Australia, while depth is added explicitly as a predictor.
+The global analysis found that latitude by itself explained more than half of the variation in mapped deep-water extreme significant wave heights for both the 1-year and 40-year Average Recurrence Intervals (ARIs). This is because latitude reflects major features of the Earth's climate system, including the broad organisation of wind belts, storm tracks, and the differences between tropical and mid-latitude wave climates.
 
-# The question
+However, the global maps also showed that locations at the same latitude can experience substantial differences in wave conditions. Factors such as the size of ocean basins, storm exposure, swell pathways, sheltering by land and regional weather systems all influence extreme waves in ways that latitude alone cannot capture. Those regional differences were generally larger for the less-frequent, more extreme 40-year ARI events. Near coastlines, lower-than-expected wave heights were also often associated with shallow continental shelves, which can reduce the size of incoming waves before they reach the coast.
 
-Why are the largest storm waves smaller over shallow continental shelves, gulfs and banks than in nearby deeper water? This report uses the Australian Climate Service **Coupled Coastal Hazard Prediction System (CCHaPS)** to examine how strongly local water depth is associated with extreme significant wave height, $H_s$.
+This report starts from that broad concept. Instead of using a global-scale relationship, it focuses on the much finer-resolution Australian CCHaPS mesh to investigate how local water depth influences regional patterns of extreme wave height. In the analysis that follows, latitude is represented using a simple linear relationship across Australia, while water depth is included explicitly as an additional predictor.
 
-The analysis compares two event sizes:
-
-- a **1-year average recurrence interval (ARI)** wave height, representing a relatively common annual extreme; and
-- a **40-year ARI** wave height, representing a rarer and generally larger event.
-
-It then replaces the full numerical wave model with a deliberately simple model that knows only local water depth and latitude. Depth represents the shallow-water constraint, while latitude provides a first-order guide to Australia's broad north–south storm climate. Comparing the simple model with CCHaPS shows what these two controls can explain and what they miss.
-
-Much of the remaining structured variance reflects physics that is represented by numerical wave modelling but absent from this two-predictor relationship. CCHaPS accounts for processes such as wind input, swell propagation, shoaling, refraction, sheltering by coasts and reefs, wave–current interaction, bottom friction, whitecapping and depth-induced breaking. Regional storm tracks and tropical cyclones also change the wave field arriving at each shelf. The residuals therefore show where the full process-based model departs from what water depth and latitude alone would predict.
+<div class="plain-language">
+<strong>Who might find this useful?</strong>
+This is an educational touchstone for surfers, students, educators and readers curious about the fundamental physical controls on coastal wave climate. It is not a local surf forecast, navigation product or engineering-design assessment.
+</div>
 
 ## A quick guide to the jargon of an ocean-wave climate scientist
 
@@ -215,84 +240,68 @@ Much of the remaining structured variance reflects physics that is represented b
 |:--|:--|
 | Significant wave height, $H_s$ | The average height of the highest one-third of waves. It describes a sea state, not the single largest wave. |
 | Water depth, $h$ | The average vertical distance between the seabed and water surface at a CCHaPS model node. |
-| ARI | Average recurrence interval. A 40-year ARI does **not** mean a storm lasts 40 years; it describes how rare the estimated wave height is. |
-| AEP | Annual exceedance probability: the chance that a level is exceeded in any year. |
+| ARI | Average Recurrence Interval. A 40-year ARI does **not** mean a storm lasts 40 years; it describes how rare the estimated wave height is. |
+| AEP | Annual Exceedance Probability: the chance that a level is exceeded in any year. |
 | Depth-limited breaking | Wave-energy loss that occurs when waves become too large for the available water depth. |
 | Residual | CCHaPS wave height minus the depth-and-latitude estimate. Positive values mean CCHaPS is higher than the simple model predicts. |
 | $R^2$ | The fraction of variation represented by the fitted relationship. It measures fit, not proof of causation. |
 
-**Who might find this useful?** This is an educational touchstone for surfers, students, educators and readers curious about the fundamental physical controls on coastal wave climate. It is not a local surf forecast, navigation product or engineering-design assessment.
+Why are the largest storm waves smaller over shallow continental shelves, gulfs and banks than in nearby deeper water? This report uses the Australian Climate Service **Coupled Coastal Hazard Prediction System (CCHaPS)** to examine how strongly local water depth influences extreme significant wave height, $H_s$.
 
-# How can depth limit a wave?
+The analysis compares two types of extreme wave event:
 
-In deep water, waves can travel without interacting strongly with the seabed. As waves move into shallower water, the seabed increasingly changes their speed, direction and shape. Shoaling can initially increase wave height, but bottom friction and depth-induced breaking eventually remove energy and prevent waves from growing without limit.
+- a **1-year average recurrence interval (ARI) wave height**: representing a relatively common extreme that can be expected, on average, once each year; and
+- a **40-year ARI wave height**, representing a rarer and generally larger event.
 
-A common physical shorthand is that the limiting height of an individual wave is some fraction of the local depth:
+To explore the influence of depth, the study compares the full CCHaPS wave model with a deliberately simple model that uses only local water depth and latitude.
+
+Water depth represents the shallow-water constraint on wave growth and propagation, while latitude provides a first-order guide to Australia's broad north–south storm climate patterns, including the distribution of storm systems and wave-generating winds. Comparing the simplified model with CCHaPS helps identify how much of the variation in extreme wave height can be explained by these two factors alone, and where additional processes become important.
+
+The remaining differences largely reflect physical processes that are included in numerical wave models but are not captured by the two-predictor (depth and latitude) relationship. CCHaPS accounts for processes such as wind input, swell propagation, shoaling, refraction, sheltering by coastlines and reefs, wave–current interaction, bottom friction, whitecapping, and depth-induced breaking. Regional storm tracks and tropical cyclones also change the wave field reaching different parts of Australia's coastline and continental shelf.
+
+The residuals, or differences between the models, therefore highlight locations where the full process-based model shows conditions that cannot be explained by water depth and latitude alone.
+
+# How does water depth limit a wave?
+
+In sufficiently deep water, individual waves travel without interacting strongly with the seabed. As they move into shallower water, they slow and their wavelengths shorten. Their height may initially increase through *shoaling*, making the waves taller and steeper. Because different parts of a wave crest encounter shallow water at different times, the waves may also change direction through *refraction*. Eventually, the larger waves break, and some of their energy contributes to currents, changes in mean water level and wave run-up at the coast.
+
+In spectral wave models, significant wave height is commonly calculated as
+
+\[
+H_s \approx H_{m0}=4\sqrt{m_0},
+\]
+
+where \(m_0\) is the total surface-elevation variance obtained by integrating the wave spectrum across all frequencies and directions. This spectral measure is approximately equivalent to the average height of the highest one-third of individual waves. As a wave spectrum moves into shallower water, bottom friction and depth-induced breaking remove energy and prevent the wave field from growing without limit.
+
+A common physical shorthand is that the limiting height of an **individual wave** is related to the local water depth:
 
 \[
 H_{\max} \approx \gamma h,
 \]
 
-where $h$ is water depth and γ is a breaker index. Here, $H_{\max}$ refers to an upper limit for an **individual wave**, not a maximum value of significant wave height, $H_s$. Significant wave height describes the distribution of waves in a sea state—approximately the average height of the highest one-third—so it cannot be substituted directly for $H_{\max}$.
+where \(h\) is water depth and \(\gamma\) is a breaker index. Because \(\gamma\) is normally less than 1, this equation says that the limiting individual-wave height is only a fraction of the local water depth: within this simple relationship, \(H_{\max}\) cannot be greater than \(h\). Here, \(H_{\max}\) refers to an upper limit for an **individual wave**, not a maximum value of significant wave height, \(H_s\). Significant wave height describes the overall sea state rather than the single largest wave present at any moment, so the breaker index \(\gamma\) cannot be used directly to calculate \(H_s\).
 
-This distinction is particularly important during extreme storm winds. In the Battjes–Janssen formulation, random wave heights are represented by a truncated distribution and only a fraction of the waves, $Q_b$, are breaking at a given location. The bulk loss of wave energy depends on that breaking fraction as well as the limiting individual-wave height. A storm sea can therefore have a large $H_s$ without every wave reaching $H_{\max}$. The value of γ is also not universal: it depends on wave period, seabed slope, wave spectrum and the wave-height definition. Consequently, the $H_s/h$ ratios examined below are useful depth-limitation diagnostics but are not direct estimates of γ.
+This distinction is particularly important during extreme storm conditions because not every wave is breaking at the same time. 
 
-CCHaPS does not impose the simple equation above as its final answer. Its WWMIII wave component solves the spectral wave-action balance and includes wind input, wave interactions, whitecapping, bottom friction and depth-limited breaking. Depth-limited breaking is represented using the established [Battjes and Janssen (1978) approach](https://doi.org/10.1061/9780872621909.034).
+A storm sea can therefore have a large \(H_s\) even though only some individual waves reach \(H_{\max}\). The breaker index, \(\gamma\), is not a universal constant: values used in different studies vary with factors such as seabed slope, wave period, wave spectrum and the definition of wave height. Consequently, the \(H_s/h\) ratios examined below are useful indicators of possible depth limitation, but they should not be interpreted as direct estimates of \(\gamma\).
+
+CCHaPS does not use the simple \(H_{\max}\approx\gamma h\) relationship as its final wave-height prediction. Instead, its WWMIII wave component solves the spectral wave-action balance and represents processes including wind input, wave–wave interactions, whitecapping, bottom friction and depth-induced breaking. The model uses the established [Battjes and Janssen (1978) approach](https://doi.org/10.1061/9780872621909.034), which represents individual wave heights with a depth-truncated distribution and estimates bulk energy loss from the fraction of waves, \(Q_b\), that reach the depth-dependent limiting height and break.
 
 <div class="plain-language">
-<strong>In plain language</strong>
-A very large individual wave cannot remain that large when there is too little water beneath it: it steepens, breaks and loses energy. In a storm, however, only part of the full distribution of waves may be breaking at once. Significant wave height summarises the whole sea state, so its depth limit is not identical to the limit for the single largest wave. Depth is also not the whole story—two places with the same depth can experience very different waves because their storm exposure, fetch, sheltering and incoming swell are different.
+<strong>In simple terms</strong>
+
+A sea state containing very large waves cannot remain unchanged when the water becomes too shallow. As waves begin to feel the seabed, they slow, become steeper and may break, causing the wave field to lose energy. During a storm, the largest waves may be breaking while smaller waves continue to propagate. The depth limit for significant wave height is therefore not the same as the limit for the single largest wave.
+
+Depth is also only part of the story. Locations with the same water depth can experience very different wave conditions because of differences in storm exposure, fetch, sheltering and incoming swell.
 </div>
 
-# The CCHaPS model and data
+# How did we estimate 1-year and 40-year storm waves?
 
-CCHaPS is a national coupled circulation-and-wave model built on an unstructured coastal mesh. The hindcast covers 1981–2020 and simulates tides, surge, currents and waves around Australia, with finer resolution near the coast. Its wave component is forced by downscaled atmospheric reanalysis and spectral waves entering the model boundary.
+This analysis estimates two levels of extreme significant wave height: the 1-year ARI, representing relatively frequent storm waves, and the 40-year ARI, representing much rarer and generally larger storm waves.
 
-The hindcast, model description and extreme-value outputs are available from:
+These are average recurrence intervals rather than schedules. Under the statistical convention used here, the chance of exceeding the 1-year and 40-year levels in any year is 63.2% and 2.47%, respectively. A 40-year event could occur more than once within 40 years or not occur at all during that period.
 
-- [CCHaPS Hindcast for Australia](https://data.csiro.au/collection/csiro%3A65669);
-- [Extreme Value Analysis of CCHaPS](https://data.csiro.au/collection/csiro%3A65867); and
-- [Hernaman et al. (2026), CCHaPS development, implementation and validation](https://doi.org/10.1016/j.ocemod.2026.102731).
-
-This report uses modelled $H_s$, bathymetric depth and mean modelled sea-surface height at each node. Average water depth is calculated as:
-
-\[
-h = h_{\mathrm{bathymetry}} + \overline{\mathrm{zos}},
-\]
-
-where bathymetry is positive downward and the overbar denotes the 1981–2020 mean sea-surface height relative to the model datum.
-
-# Estimating 1-year and 40-year storm waves
-
-The attached exploratory script calculated several pre-selected AEP levels. Here the same fitted Gumbel distributions are used to calculate the exact AEP corresponding to each requested ARI:
-
-\[
-\mathrm{AEP}(T) = 1 - \exp\left(-\frac{1}{T}\right).
-\]
-
-This gives an AEP of 63.2% for a 1-year ARI and 2.47% for a 40-year ARI. The 40-year value describes a rare annual maximum; it is not a prediction that the event will occur on a fixed 40-year schedule.
-
-The report uses three deliberately simple models. A latitude-only benchmark is fitted across **all valid positive water depths**:
-
-\[
-H_s = \alpha_0 + \alpha_\phi(\phi-\phi_0).
-\]
-
-The response remains in metres for the latitude relationship: latitude is not fitted to $\log_{10}(H_s)$. The depth-only model restores the power-law formulation from the exploratory analysis and is fitted over the shelf-depth range from `r params$minimum_depth_m` to `r params$maximum_depth_m` m:
-
-\[
-\log_{10}(H_s) = \log_{10}(C) + \beta_d\log_{10}(h),
-\]
-
-which is equivalent to $H_s=C h^{\beta_d}$. To keep latitude linear on the original wave-height scale, the combined model uses that fitted depth exponent as a fixed power-law shape and estimates an additive latitude effect in metres:
-
-\[
-H_s = \beta_0 + C h^{\beta_d} + \beta_\phi(\phi-\phi_0).
-\]
-
-Here \(\phi\) is latitude and \(\phi_0\) is a reference latitude of `r abs(params$reference_latitude)`°S. The exponent \(\beta_d\) is estimated from the log–log depth fit; then \(\beta_0\), \(C\) and \(\beta_\phi\) are estimated by an ordinary linear model on $H_s$ in metres. Thus, the depth response retains the original power-law shape while the latitude correction remains additive and linear rather than becoming exponential. The all-depth latitude-only fit is a broader benchmark, so its performance values should not be compared as if it used the same fitting domain.
-
-Latitude is not treated as a physical cause by itself. It is a deliberately simple proxy for large-scale changes in storm type and wave exposure around Australia; regional fetch, coastline orientation, sheltering and tropical-cyclone exposure remain outside the model.
+The code uses Gumbel distributions fitted to annual maximum \(H_s\) at each CCHaPS mesh node to calculate both return levels. It then fits simple latitude-only, depth-only and combined depth-and-latitude models for comparison with the full CCHaPS estimates.
 
 ```{r load-calculate-and-fit, results='hide', fig.keep='none'}
 # Check the local inputs before performing the expensive calculations.
@@ -569,7 +578,17 @@ primary_fit_summary <- primary_fit_summary[
 ]
 ```
 
-# Results: how much do depth and latitude explain?
+# How much do depth and latitude explain?
+
+To explore the importance of depth and latitude, the report uses three deliberately simple statistical models. A latitude-only model provides a broad national benchmark across all locations with valid positive water depth. A depth-only model describes the nonlinear relationship between water depth and significant wave height across shelf depths from `r params$minimum_depth_m` to `r params$maximum_depth_m` m. The combined model retains this depth response and adds a linear latitude effect:
+
+\[
+H_s = \beta_0 + C h^{\beta_d} + \beta_\phi(\phi-\phi_0).
+\]
+
+The **depth part**, \(C h^{\beta_d}\), represents the way wave height changes with water depth, \(h\). The **depth scale**, \(C\), is the depth-related contribution when \(h=1\) m, while the **depth exponent**, \(\beta_d\), controls how quickly that contribution increases as the water becomes deeper. The **latitude part**, \(\beta_\phi(\phi-\phi_0)\), adjusts wave height according to the location's latitude, \(\phi\), relative to the reference latitude, \(\phi_0\), which is `r abs(params$reference_latitude)`°S. The **latitude coefficient**, \(\beta_\phi\), gives the change in \(H_s\) per degree of latitude, and the **combined-model intercept**, \(\beta_0\), provides the remaining constant offset. Table 1 links these symbols directly to the fitted values. The separate latitude-only benchmark uses the equivalent intercept and latitude terms, \(\alpha_0\) and \(\alpha_\phi\).
+
+Latitude is not treated as a physical cause of wave height. It is a deliberately simple proxy for large-scale changes in storm type and wave exposure around Australia; regional fetch, coastline orientation, sheltering and tropical-cyclone exposure remain outside the models.
 
 ```{r parameter-table, echo=FALSE, results='asis'}
 depth_only_summary <- fit_summary[fit_summary$Model == "Depth only", ]
@@ -581,22 +600,22 @@ coefficient_table <- data.frame(
   `ARI (years)` = fit_summary$ARI_years,
   `AEP (%)` = sprintf("%.2f", fit_summary$AEP_percent),
   `Model` = fit_summary$Model,
-  `Additive intercept (m)` = ifelse(
+  `Intercept, α₀ or β₀<br>(m)` = ifelse(
     is.na(fit_summary$intercept_m),
     "—",
     sprintf("%.3f", fit_summary$intercept_m)
   ),
-  `Depth scale C<br>at h = 1 m (m)` = ifelse(
+  `Depth scale, C<br>at h = 1 m (m)` = ifelse(
     is.na(fit_summary$depth_scale_m),
     "—",
     sprintf("%.3f", fit_summary$depth_scale_m)
   ),
-  `Depth exponent<br>(power on h)` = ifelse(
+  `Depth exponent, βd<br>(power on h)` = ifelse(
     is.na(fit_summary$depth_exponent),
     "—",
     sprintf("%.3f", fit_summary$depth_exponent)
   ),
-  `Latitude coefficient<br>(m per degree)` = ifelse(
+  `Latitude coefficient,<br>αφ or βφ (m per degree)` = ifelse(
     is.na(fit_summary$latitude_coefficient),
     "—",
     sprintf("%.4f", fit_summary$latitude_coefficient)
@@ -619,8 +638,9 @@ knitr::kable(
   align = c("r", "r", "l", "r", "r", "r", "r"),
   escape = FALSE,
   caption = paste0(
-    "Power-law depth and original-scale latitude coefficients. The additive ",
-    "intercept and latitude effect are evaluated relative to ",
+    "Table 1. Fitted parameters for the latitude-only, depth-only and combined ",
+    "depth-and-latitude models. Symbols match the equation above. The intercepts ",
+    "and latitude coefficients are evaluated relative to ",
     abs(params$reference_latitude), "°S."
   )
 )
@@ -637,7 +657,7 @@ knitr::kable(
 )
 ```
 
-The latitude-only relationship and the latitude term in the combined model remain linear in $H_s$ metres. Only the depth exponent is estimated from $\log_{10}(H_s)$ versus $\log_{10}(h)$. To keep the performance statistics comparable, every reported $R^2$ and RMSE is calculated after prediction on the original $H_s$ scale in metres. The all-depth latitude-only model uses the exact 1-year and 40-year ARI $H_s$ at every node with finite latitude, positive finite depth and positive finite return-level wave height. Its $R^2$ values are `r sprintf("%.3f", latitude_only_summary$R2[1])` for the 1-year extreme and `r sprintf("%.3f", latitude_only_summary$R2[2])` for the 40-year extreme. Latitude alone can still have a low national $R^2$ because it does not represent depth, exposure, sheltering, fetch or storm type. These values also describe a broader depth domain and are therefore a benchmark rather than a like-for-like test against the two shelf-depth models.
+The latitude-only model and the latitude term in the combined model are fitted directly to $H_s$ in metres, while the depth contribution is estimated as a power law. To keep the performance statistics comparable, every reported $R^2$ and RMSE is calculated after prediction on the original $H_s$ scale. The all-depth latitude-only model uses the exact 1-year and 40-year ARI $H_s$ at every node with finite latitude, positive finite depth and positive finite return-level wave height. Its $R^2$ values are `r sprintf("%.3f", latitude_only_summary$R2[1])` for the 1-year extreme and `r sprintf("%.3f", latitude_only_summary$R2[2])` for the 40-year extreme. Latitude alone can still have a low national $R^2$ because it does not capture local influences such as depth, exposure, sheltering, fetch or storm type. These values also describe a broader depth domain and are therefore a benchmark rather than a like-for-like test against the two shelf-depth models.
 
 For the 1-year extreme, adding latitude changes $R^2$ from `r sprintf("%.3f", depth_only_summary$R2[1])` to `r sprintf("%.3f", primary_fit_summary$R2[1])`; for the 40-year extreme it changes from `r sprintf("%.3f", depth_only_summary$R2[2])` to `r sprintf("%.3f", primary_fit_summary$R2[2])`. This comparison uses identical shelf-depth nodes. Any improvement shows that the broad north–south storm climate contains information not represented by depth alone, but it does not make latitude a complete description of storm exposure.
 
@@ -844,7 +864,7 @@ legend(
 )
 ```
 
-# Map comparison
+# Where do depth and latitude work—and where do they miss?
 
 The CCHaPS calculations are supplied on an unstructured mesh rather than a regular raster. For plotting only, each model node is assigned to a regular `r params$map_resolution_degrees`° longitude–latitude cell; where several nodes fall inside one cell, their values are averaged. Empty display cells are filled from their immediate neighbours for `r params$map_gap_fill_passes` short passes, then the rasters are clipped back to the fitted shelf-depth range and masked over land. This rasterisation closes small visual gaps and provides a consistent map grid, but it does not change the regressions, which are fitted to the original unstructured nodes.
 
@@ -1181,9 +1201,23 @@ The wave-height colour scale runs from 0 to `r params$wave_display_max_m` m in 1
 Depth limitation is more visible for the rarer 40-year waves because a larger incoming event comes closer to the maximum size that shallow water can support. The remaining regional patterns are a reminder that the incoming storm climate, tropical cyclones, swell pathways, fetch, sheltering and shelf shape determine how much wave energy reaches each depth.
 </div>
 
-# Explore the layers interactively
+# What surfers and wave-watchers should take from this
 
-Use the radio buttons at bottom left to switch between the CCHaPS estimate, depth-and-latitude model and residual for each ARI. The grey background is the Esri World Light Gray Canvas basemap. Small gaps in the regular display grid have been filled from neighbouring cells, while the fitted shelf-depth and land masks are retained.
+- **ARI indicates how rare an event is, not how long you need to wait for it to occur.** A 40-year ARI wave height is less likely in any year than a 1-year ARI wave height. It could occur more than once within 40 years or not occur at all during that period.
+
+- **Shallow water limits the largest waves.** In the simple individual-wave relationship, \(H_{\max}\approx\gamma h\), the limiting height is a fraction of water depth and cannot exceed the depth. Significant wave height, \(H_s\), describes the full sea state, however, so the mapped \(H_s/h\) ratio is an indicator of depth limitation rather than a direct estimate of \(\gamma\).
+
+- **Depth becomes a stronger control for rarer, larger waves.** The depth-only and depth-and-latitude relationships are stronger for the 40-year ARI than for the 1-year ARI, consistent with larger waves approaching the shallow-water limit across more of the continental shelf.
+
+- **Latitude sets the broad storm-climate background, while depth provides a local constraint.** Together they represent much of the national variation, but locations with the same latitude and depth can still experience very different waves because of exposure, fetch, sheltering, swell pathways and storm type.
+
+- **Red and blue residuals show where further investigation is needed.** Red means CCHaPS estimates larger waves than the depth-and-latitude model, while blue means it estimates smaller waves. These differences should not automatically be attributed to one process or interpreted as proof that either estimate is wrong.
+
+- **CCHaPS is more detailed than the global model, but it is still a national model.** The results describe modelled shelf and coastal \(H_s\), not the face height of an individual breaking wave or the conditions at a particular surf break, reef, bar or harbour entrance.
+
+# Explore the maps yourself
+
+Use the radio buttons at bottom left to switch between the CCHaPS estimate, depth-and-latitude model and residual for each ARI, or select the bathymetry layer to view the average water depth used in the analysis. The legend at top right changes automatically with the selected layer. The grey background is the Esri World Light Gray Canvas basemap. Small gaps in the regular display grid have been filled from neighbouring cells, while the fitted shelf-depth and land masks are retained.
 
 ```{r interactive-map, echo=FALSE}
 wave_palette <- leaflet::colorBin(
@@ -1204,13 +1238,23 @@ residual_palette <- leaflet::colorBin(
   right = FALSE
 )
 
+depth_palette <- leaflet::colorBin(
+  palette = depth_colours,
+  bins = depth_breaks,
+  domain = c(params$minimum_depth_m, params$maximum_depth_m),
+  na.color = "transparent",
+  pretty = FALSE,
+  right = FALSE
+)
+
 interactive_groups <- c(
   "CCHaPS — ARI 1 year",
   "CCHaPS — ARI 40 years",
   "Depth + latitude — ARI 1 year",
   "Depth + latitude — ARI 40 years",
   "Residual — ARI 1 year",
-  "Residual — ARI 40 years"
+  "Residual — ARI 40 years",
+  "Bathymetry — average water depth"
 )
 
 wave_display <- lapply(
@@ -1241,6 +1285,13 @@ residual_display <- lapply(
       values = TRUE
     )
   }
+)
+
+bathymetry_display <- terra::clamp(
+  map_rasters[["depth_m"]],
+  lower = params$minimum_depth_m,
+  upper = params$maximum_depth_m,
+  values = TRUE
 )
 
 depth_map <- leaflet::leaflet(
@@ -1275,32 +1326,138 @@ for (i in seq_along(residual_display)) {
   )
 }
 
-depth_map |>
+depth_map <- leaflet::addRasterImage(
+  depth_map,
+  bathymetry_display,
+  colors = depth_palette,
+  opacity = 0.83,
+  group = interactive_groups[7],
+  project = TRUE,
+  maxBytes = 64 * 1024 * 1024
+)
+
+# Build one legend control containing three panels. JavaScript below displays
+# only the panel that matches the selected base layer.
+format_legend_value <- function(value) {
+  if (abs(value - round(value)) < 1e-8) {
+    sprintf("%.0f", value)
+  } else {
+    sprintf("%.1f", value)
+  }
+}
+
+make_legend_panel <- function(kind, title, breaks, colours, visible = FALSE) {
+  if (length(colours) != length(breaks) - 1) {
+    stop("Legend colours must match the number of intervals.")
+  }
+
+  rows <- lapply(seq_along(colours), function(i) {
+    htmltools::tags$div(
+      class = "cchaps-legend-row",
+      htmltools::tags$span(
+        class = "cchaps-legend-swatch",
+        style = paste0("background:", colours[i], ";")
+      ),
+      htmltools::tags$span(
+        paste0(
+          format_legend_value(breaks[i]),
+          " – ",
+          format_legend_value(breaks[i + 1])
+        )
+      )
+    )
+  })
+
+  htmltools::tags$div(
+    class = "cchaps-legend-panel",
+    `data-legend-kind` = kind,
+    style = if (visible) NULL else "display:none;",
+    htmltools::tags$div(
+      class = "cchaps-legend-title",
+      htmltools::HTML(title)
+    ),
+    htmltools::tagList(rows)
+  )
+}
+
+legend_html <- htmltools::tags$div(
+  class = "cchaps-dynamic-legend",
+  role = "group",
+  `aria-label` = "Map legend",
+  make_legend_panel(
+    "wave",
+    "Extreme H<sub>s</sub> (m)",
+    wave_breaks,
+    colzRamp(length(wave_breaks) - 1),
+    visible = TRUE
+  ),
+  make_legend_panel(
+    "residual",
+    "CCHaPS − depth + latitude (m)",
+    residual_breaks,
+    bwr(length(residual_breaks) - 1)
+  ),
+  make_legend_panel(
+    "depth",
+    "Average water depth, h (m)",
+    depth_breaks,
+    depth_colours
+  )
+)
+
+depth_map <- leaflet::addControl(
+  depth_map,
+  html = htmltools::HTML(as.character(legend_html)),
+  position = "topright",
+  layerId = "cchaps-dynamic-legend",
+  className = "cchaps-legend-wrapper"
+)
+
+depth_map <- depth_map |>
   leaflet::hideGroup(interactive_groups[-1]) |>
   leaflet::addLayersControl(
     baseGroups = interactive_groups,
-    position = "bottomright",
+    position = "bottomleft",
     options = leaflet::layersControlOptions(collapsed = FALSE)
   ) |>
-  leaflet::addLegend(
-    position = "topright",
-    pal = wave_palette,
-    values = wave_breaks,
-    title = htmltools::HTML("Extreme H<sub>s</sub> (m)"),
-    opacity = 0.9
-  ) |>
-  leaflet::addLegend(
-    position = "bottomleft",
-    pal = residual_palette,
-    values = residual_breaks,
-    title = htmltools::HTML("CCHaPS − depth +<br>latitude (m)"),
-    opacity = 0.9
-  ) |>
   leaflet::fitBounds(110, -45, 155, -5)
+
+legend_switch_js <- r"(
+function(el, x) {
+  var map = this;
+  var legend = el.querySelector(".cchaps-dynamic-legend");
+
+  if (!legend) return;
+
+  function showLegend(layerName) {
+    var kind = "wave";
+
+    if (layerName && layerName.indexOf("Residual") === 0) {
+      kind = "residual";
+    } else if (layerName && layerName.indexOf("Bathymetry") === 0) {
+      kind = "depth";
+    }
+
+    var panels = legend.querySelectorAll(".cchaps-legend-panel");
+    Array.prototype.forEach.call(panels, function(panel) {
+      panel.style.display =
+        panel.getAttribute("data-legend-kind") === kind ? "block" : "none";
+    });
+  }
+
+  map.on("baselayerchange", function(event) {
+    showLegend(event.name);
+  });
+
+  showLegend("CCHaPS — ARI 1 year");
+}
+)"
+
+htmlwidgets::onRender(depth_map, legend_switch_js)
 ```
 
 
-# What does the depth-and-latitude model miss?
+## Reading the residuals
 
 A red area of positive residual does not mean the simple calculation is wrong. It means the full CCHaPS wave climate is more energetic than expected from depth and the broad latitude effect. Likely contributors include exposure to Southern Ocean swell, tropical-cyclone or east-coast-low waves, long fetch, coastline orientation, wave focusing and connections to deeper water.
 
@@ -1336,6 +1493,27 @@ This historical relationship should therefore not be assumed to remain fixed. A 
 
 A further analysis could test the conceptual connection with the [Dean equilibrium beach profile](https://journals.flvc.org/jcr/article/view/78405), $h(x)=Ax^{2/3}$. If a local limiting wave height is approximated as $H_{\mathrm{lim}}\approx\gamma h$, then a Dean-like beach profile implies $H_{\mathrm{lim}}(x)\approx\gamma A x^{2/3}$. This would describe how a depth-limited wave ceiling changes with cross-shore distance; it would not imply that the national fitted depth exponent must equal $2/3$. A direct test would require shore-normal beach transects, distance from the coast, local sediment information or a fitted $A$, and comparable offshore wave forcing. The present nodes span shelves, gulfs, banks, reefs and non-equilibrium settings, so this report does not estimate $A$ or test the Dean exponent. The formulation and its applications are described further by [Dean (1991)](https://journals.flvc.org/jcr/article/download/78405/75816/).
 
+# The CCHaPS model and data
+
+CCHaPS is a national coupled circulation-and-wave model built on an unstructured coastal mesh. The hindcast covers 1981–2020 and simulates tides, storm surge, ocean currents and waves around Australia, with finer resolution near the coast.
+
+The wave model is forced by downscaled atmospheric reanalysis data together with spectral wave conditions applied along the model boundary.
+
+The hindcast, bathymetry, extreme-value outputs and model description are available from:
+
+- [CCHaPS Hindcast for Australia](https://doi.org/10.25919/6tbn-px91);
+- [CCHaPS Bathymetry for Australia](https://doi.org/10.25919/y0kc-a922);
+- [Extreme Value Analysis of CCHaPS](https://doi.org/10.25919/0krs-nr55); and
+- [Hernaman et al. (2026), CCHaPS development, implementation and validation](https://doi.org/10.1016/j.ocemod.2026.102731).
+
+This report uses modelled significant wave height, $H_s$, bathymetric depth and mean modelled sea-surface height at every mesh node. Average water depth for 1981–2020 is calculated as:
+
+\[
+h = h_{\mathrm{bathymetry}} + \overline{\mathrm{zos}},
+\]
+
+where bathymetry is positive downward and the overbar denotes the 1981–2020 mean sea-surface height relative to the model datum, the Australian Vertical Working Surface (AVWS; EPSG:9458).
+
 # Limits and reproducibility notes
 
 - The depth-and-latitude model describes a national association; it does not isolate either variable as a causal effect.
@@ -1358,23 +1536,6 @@ A further analysis could test the conceptual connection with the [Dean equilibri
 | Annual mean sea-surface height | `timeseries/zos_cchaps_hindcast_BARRA-R2_WHACS_ERA5_yr_mean_198101010000-202012310000.nc` |
 | Gumbel fits to annual-maximum $H_s$ | `EVA/hs_cchaps_hindcast_BARRA-R2_WHACS_ERA5_yr_max_198101010000-202012310000_fgumbel.nc` |
 | Australian coastline polygons | `LGA_2023_AUST_GDA2020_coastline` |
-
-## Changes made to the exploratory script
-
-The report keeps the original CCHaPS inputs, mean-water-level depth correction, Gumbel return-level calculation and $H_s/h$ diagnostic. It also:
-
-- calculates exact 1-year and 40-year ARIs rather than using the nearest pre-computed AEP columns;
-- checks that bathymetry and extreme-value files use the same node order;
-- fits and reports both return intervals consistently;
-- adds an all-depth, original-scale latitude-only benchmark and an additive linear latitude term to the shelf-depth model;
-- restores the original log–log depth fit, keeps the latitude effect additive in $H_s$ metres and reports original-scale $R^2$ and RMSE;
-- colours the depth-versus-wave-height point cloud by latitude;
-- masks maps to the fitted depth range;
-- replaces a national Voronoi operation with regular-grid averaging and limited gap filling for more practical HTML maps;
-- uses two shared colour bars instead of six compressed legends in the tiled map;
-- displays residuals from -5 to 5 m in discrete 0.5 m colours and places colour-key titles above their bars;
-- fixes the inconsistent `coastline`/`coastline_oz` object name; and
-- removes exploratory AIC, alternative-distribution and confidence-interval calculations that were not used by the final model.
 
 ## Data sources
 
