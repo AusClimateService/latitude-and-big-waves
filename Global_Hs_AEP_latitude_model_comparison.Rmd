@@ -1,6 +1,5 @@
 ---
 title: "A World of Waves: Why Latitude Explains So Much About the Biggest Waves—but Not Everything"
-author: "Julian O'Grady, Tim Leeson and Bryan Hally"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   html_document:
@@ -9,6 +8,8 @@ output:
     number_sections: true
     theme: flatly
     code_folding: hide
+    highlight: tango
+    fig_caption: true
   word_document:
     toc: true
 params:
@@ -25,32 +26,248 @@ params:
 # Code is included in HTML but folded closed by default, allowing the
 # "Show code" control to reveal it when requested.
 knitr::opts_chunk$set(
-  echo = TRUE,
+  echo = knitr::is_html_output(),
   message = FALSE,
   warning = FALSE,
+  error = FALSE,
   fig.width = 11,
   fig.height = 6.5,
-  fig.align = "center"
+  fig.align = "center",
+  out.width = "100%",
+  dpi = 150
 )
 
 library(terra)
 library(data.table)
 library(leaflet)
+library(viridisLite)
 ```
 
-# Introduction
+<style>
+.plain-language {
+  background: #e9f7fc;
+  border-left: 7px solid #28a9d6;
+  border-radius: 5px;
+  color: #18394a;
+  font-size: 1.17em;
+  line-height: 1.58;
+  margin: 1.4em 0;
+  padding: 1.05em 1.25em 1.05em 3.8em;
+  position: relative;
+}
+.plain-language::before {
+  align-items: center;
+  background: #178fc0;
+  border-radius: 50%;
+  color: white;
+  content: "i";
+  display: flex;
+  font-family: Georgia, serif;
+  font-size: 1.25em;
+  font-weight: bold;
+  height: 1.75em;
+  justify-content: center;
+  left: 1.05em;
+  position: absolute;
+  top: 1.05em;
+  width: 1.75em;
+}
+.jargon-title {
+  color: #174f55;
+  font-size: 1.16em;
+  margin: 1.7em 0 0.55em;
+}
+#jargon-guide + table,
+#surfer-takeaways + table,
+#surfer-takeaways table {
+  border: 1px solid #bfd0d5;
+  border-collapse: separate;
+  border-radius: 7px;
+  border-spacing: 0;
+  box-shadow: 0 2px 8px rgba(24, 57, 74, 0.10);
+  margin: 1.2em 0 1.7em;
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+#jargon-guide + table thead th,
+#surfer-takeaways + table thead th,
+#surfer-takeaways table thead th {
+  background: #176b72;
+  border: 0;
+  color: white;
+  font-size: 1.02em;
+  padding: 0.8em 0.9em;
+}
+#jargon-guide + table tbody td,
+#surfer-takeaways + table tbody td,
+#surfer-takeaways table tbody td {
+  border: 0;
+  border-bottom: 1px solid #dce7e9;
+  line-height: 1.45;
+  padding: 0.76em 0.9em;
+  vertical-align: top;
+}
+#jargon-guide + table tbody tr:nth-child(odd) td,
+#surfer-takeaways + table tbody tr:nth-child(odd) td,
+#surfer-takeaways table tbody tr:nth-child(odd) td {
+  background: #f7fbf9;
+}
+#jargon-guide + table tbody tr:nth-child(even) td,
+#surfer-takeaways + table tbody tr:nth-child(even) td,
+#surfer-takeaways table tbody tr:nth-child(even) td {
+  background: #e6f3ed;
+}
+#jargon-guide + table tbody td:first-child,
+#surfer-takeaways + table tbody td:first-child,
+#surfer-takeaways table tbody td:first-child {
+  background: #dcefeb !important;
+  border-right: 1px solid #c2ddd8;
+  color: #174f55;
+  font-weight: 650;
+  width: 33.333%;
+}
+#jargon-guide + table tbody tr:nth-child(even) td:first-child,
+#surfer-takeaways + table tbody tr:nth-child(even) td:first-child,
+#surfer-takeaways table tbody tr:nth-child(even) td:first-child {
+  background: #cfe6df !important;
+}
+#jargon-guide + table thead th:first-child,
+#surfer-takeaways + table thead th:first-child,
+#surfer-takeaways table thead th:first-child {
+  width: 33.333%;
+}
+#jargon-guide + table thead th:nth-child(2),
+#jargon-guide + table tbody td:nth-child(2),
+#surfer-takeaways + table thead th:nth-child(2),
+#surfer-takeaways + table tbody td:nth-child(2),
+#surfer-takeaways table thead th:nth-child(2),
+#surfer-takeaways table tbody td:nth-child(2) {
+  width: 66.667%;
+}
+.model-data-table {
+  border: 1px solid #bfd0d5;
+  border-collapse: separate;
+  border-radius: 7px;
+  border-spacing: 0;
+  box-shadow: 0 2px 8px rgba(24, 57, 74, 0.10);
+  margin: 1.2em 0 1.7em;
+  overflow: hidden;
+  width: 100%;
+}
+.model-data-table thead th {
+  background: #176b72;
+  border: 0;
+  color: white;
+  padding: 0.7em 0.65em;
+  text-align: center;
+}
+.model-data-table tbody td {
+  border: 0;
+  border-bottom: 1px solid #dce7e9;
+  padding: 0.65em;
+  text-align: right;
+}
+.model-data-table tbody tr:nth-child(odd) td { background: #f7fbf9; }
+.model-data-table tbody tr:nth-child(even) td { background: #e6f3ed; }
+.lightbox-overlay {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.88);
+  display: none;
+  inset: 0;
+  justify-content: center;
+  padding: 3.5rem 2rem 2rem;
+  position: fixed;
+  z-index: 99999;
+}
+.lightbox-overlay.open { display: flex; }
+.lightbox-overlay img {
+  background: white;
+  cursor: default;
+  max-height: 91vh;
+  max-width: 96vw;
+  object-fit: contain;
+}
+.lightbox-close {
+  background: transparent;
+  border: 0;
+  color: white;
+  cursor: pointer;
+  font-size: 3rem;
+  line-height: 1;
+  position: absolute;
+  right: 1.1rem;
+  top: 0.45rem;
+}
+.main-container img:not(.leaflet-tile) { cursor: zoom-in; }
+.leaflet-container img { cursor: inherit !important; }
+.leaflet-control-layers,
+.leaflet-control-layers label {
+  font-size: 14px;
+  line-height: 1.28;
+}
+.global-dynamic-legend {
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 5px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+  color: #333;
+  line-height: 1.18;
+  max-height: 72vh;
+  min-width: 128px;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+.global-legend-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.global-legend-row {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  min-height: 16px;
+  white-space: nowrap;
+}
+.global-legend-swatch {
+  display: inline-block;
+  flex: 0 0 18px;
+  height: 15px;
+}
+@media screen and (max-width: 700px) {
+  #jargon-guide + table,
+  #surfer-takeaways + table,
+  #surfer-takeaways table,
+  .model-data-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+</style>
 
-Anyone who follows ocean swell knows that wave heights vary greatly around the world. Latitude—the north–south position on the globe—is a surprisingly powerful influence on this pattern. The energetic storm belts of the mid-latitudes generate more frequent large wind seas and long-travelling swell than most tropical waters. However, latitude cannot explain everything. Coastlines at similar latitudes can have very different wave climates. The greater land area in the Northern Hemisphere breaks up ocean basins and limits fetch and swell pathways, whereas the Southern Ocean provides a more continuous expanse of open water. Wave climates are also shaped by coastal exposure and regional weather systems such as fronts, East Coast Lows and tropical cyclones—also known as hurricanes or typhoons.
+<div id="figure-lightbox" class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="Enlarged figure">
+  <button class="lightbox-close" type="button" aria-label="Close enlarged figure">&times;</button>
+  <img src="" alt="Enlarged report figure">
+</div>
 
-This report uses estimates of significant wave height ($H_s$) from a global numerical wave model to explore some key concepts governing how large waves can become. Significant wave height is a statistical description of the sea state, approximately equal to the average height of the highest one-third of waves. It is not the height of the single largest wave, nor does it necessarily represent the breaking-wave face at a surf break.
+# Why do the biggest ocean storm waves vary around the world?
 
-A probability distribution is fitted at each ocean grid cell to estimate wave heights associated with 1-year and 40-year average recurrence intervals. A deliberately simple latitude-only curve is then fitted to these estimates as a benchmark. The comparison asks: How much of the global pattern can latitude explain, and what additional regional detail does the numerical model provide?
+<div class="plain-language">
+Latitude describes the broad global storm-wave climate: the energetic storm belts of the mid-latitudes generate more frequent large wind seas and long-travelling swell than most tropical waters. But latitude is not the whole answer. Land, fetch, swell pathways and regional storm systems cause large differences between locations at the same latitude.<br><br>
+This is an educational explainer of the basic concepts for surfers, students, educators and readers curious about the physical controls on the global wave climate. It is not a local surf forecast, navigation product or engineering-design assessment. The results primarily represent offshore, deep-water conditions because the global model grid is too coarse to resolve detailed coastal bathymetry.<br><br>
+<strong>This explainer is structured so</strong> the main sections follow key questions. Each question is answered first with a simplified blue breakout response for readers who want to skim, followed by explanatory discussion, figures and maps for readers who want to wade further into the topic. Equations, methods and reproducible R code are also provided for readers who want to dive deeply into the technical detail.
+</div>
+
+Anyone who follows ocean swell knows that wave heights vary greatly around the world. Significant wave height, $H_s$, describes the overall sea state; here, values from a global numerical wave model are used to investigate how much of that pattern can be represented by latitude—the north–south position on the globe. The analysis estimates relatively frequent 1-year and rarer 40-year extreme wave heights, fits a deliberately simple latitude-only curve, and maps the regional detail that the simple relationship misses.
+
+The comparison asks: **how much of the global pattern can latitude explain, and what additional regional detail does the numerical model provide?** The residuals—the wave-model-derived estimate minus the latitude-only estimate—show where the numerical model produces higher or lower values than the simple latitude benchmark. They highlight features for further investigation rather than proving that any single process is responsible.
 
 This analysis is not an independent validation against buoy or satellite observations. An example of model validation against wave-buoy observations along [Australia’s east coast is available here](https://ausclimateservice.github.io/buoys2cchaps/buoys2cchaps.html).
 
-The global extreme-wave dataset used here is provided on a relatively coarse 1° grid, which does not resolve detailed nearshore bathymetry or wave transformation close to the coast. Consequently, the mapped values, fitted relationships, statistics and headline findings in this report should be interpreted primarily as representing offshore, deep-water conditions. A follow-up report uses the higher-resolution CCHaPS model and its bathymetry to better represent shallow coastal waters around Australia: [*Shallow Water, Smaller Waves: How Depth Limits Australia’s Biggest Storm Waves*](https://ausclimateservice.github.io/latitude-and-big-waves/CCHaPS_depth_limited_extreme_waves.html).
+The global extreme-wave dataset is provided on a relatively coarse 1° grid. Its mapped values, fitted relationships and statistics should therefore be interpreted primarily as representing offshore, deep-water conditions. The companion explainer [*Shallow Water, Smaller Waves*](https://ausclimateservice.github.io/latitude-and-big-waves/CCHaPS_depth_limited_extreme_waves.html) uses the higher-resolution CCHaPS model and its bathymetry to investigate Australia’s shallower shelf and coastal waters.
 
-## A quick guide to the jargon of an ocean-wave climate scientist
+<p id="jargon-guide" class="jargon-title"><strong>A quick guide to the jargon of an ocean-wave climate scientist</strong></p>
 
 | Term | Plain-language meaning |
 |:--|:--|
@@ -60,40 +277,22 @@ The global extreme-wave dataset used here is provided on a relatively coarse 1°
 | Wave-model-derived estimate | An extreme wave height calculated from a statistical distribution fitted to numerical wave-model output. |
 | Latitude-only model | A simple smooth curve that gives every ocean location at the same latitude the same expected extreme $H_s$. |
 | Residual | What is left after subtracting the latitude-only value from the full model value. |
-| $R^2$ | The share of geographic variation represented by the latitude-only model: 1 is a perfect match and 0 means it explains none of that variation. |
+| $R^2$ | A measure of goodness of fit: the proportion of geographic variation represented by the fitted relationship. A value of 1 indicates a perfect fit, while 0 indicates that the relationship explains none of the variation. |
 
-# Aim
+# How do we estimate the biggest storm waves?
 
-This analysis compares wave-model-derived estimates of extreme $H_s$ for **1-year and 40-year ARIs** with a simple cosine curve based only on latitude. In practical terms, it will:
+<div class="plain-language">
+We use the highest significant wave height, which represents the overall sea state, from each year at each global wave-model grid cell to estimate the relatively frequent 1-year and rarer 40-year Average Recurrence Interval (ARI) levels. The 1-year ARI represents an extreme that might occur in a typical year, whereas the 40-year ARI represents a much rarer event. These intervals indicate how rare an event is, not how long you need to wait for it to occur.
+</div>
 
-1. calculate the 1-year and 40-year extreme $H_s$ at each ocean grid cell;
-2. fit a smooth latitude-only curve to those values;
-3. measure how much of the global pattern is represented by latitude alone; and
-4. map where the full numerical-model estimate is higher or lower than the latitude-only expectation.
+At each ocean grid cell, a Generalised Extreme Value distribution is fitted to the annual maximum $H_s$ values. For an Average Recurrence Interval of $T$ years, the corresponding Annual Exceedance Probability is
 
-Positive residuals indicate places where the wave-model-derived estimate is larger than the latitude-only expectation. Negative residuals indicate places where it is smaller. Residuals should be interpreted as spatial features represented by the wave-model-derived field, not automatically as physical truth: they may also reflect model resolution, forcing and extreme-value fitting choices.
+\[
+\mathrm{AEP}=1-\exp\left(-\frac{1}{T}\right),
+\qquad T=\mathrm{ARI}\text{ in years}.
+\]
 
-**Who might find this useful?** This report is intended as an educational explanation for surfers, students, educators and anyone curious about where big waves occur. It provides a simple touchstone for understanding the fundamental controls on the global wave climate---latitude, wind and storm belts, fetch, basin geometry and event rarity---rather than a decision-support or engineering-design product.
-
-# Controls on extreme significant wave height
-
-At the broadest scale, three sets of controls determine the extreme significant wave height likely to occur at a location.
-
-First, consider the storm climate. The Sun heats equatorial regions more strongly than the poles, creating temperature and pressure differences that drive global atmospheric circulation. Earth’s rotation organizes this circulation into prevailing wind belts, while land masses further modify the winds and storm tracks. Even on a water-only Earth with no continents, wave heights would vary with latitude because the tropics, subtropics and mid-latitudes would still experience different winds and storm systems.  
-
-**Read more about global circulation patterns:** the Australian Bureau of Meteorology explains how tropical rising air contributes to the global pressure and wind belts in its [subtropical-ridge explainer](https://www.bom.gov.au/resources/learn-and-explore/climate-knowledge-centre/climate-factors/subtropical-ridge), and describes the storm-bearing Southern Ocean westerlies in its [Southern Annular Mode explainer](https://www.bom.gov.au/climate/sam/).
-
-Second, the real world has **land and ocean basins**. Fetch---the distance over water across which the wind blows in a consistent direction---acts like a runway for wave growth. A long, unobstructed ocean path gives wind more room to build waves, while islands and continents can shelter a coast or block swell arriving from a particular direction. The three classic controls on locally generated wind waves are wind speed, wind duration and fetch ([NOAA National Ocean Service](https://oceanservice.noaa.gov/education/tutorial_currents/03coastal1.html)).
-
-Third, the answer depends on **how rare an event is being considered**. A 40-year ARI significant wave height will generally be larger than a 1-year ARI value because waiting longer gives more opportunity for an unusual storm to occur. This does not mean that the storm lasts for 40 years, or that it arrives regularly every 40 years. ARI describes a long-term average frequency.
-
-Other important controls include swell direction, seasonal and longer-term climate variability, sea ice, and currents that can steepen or focus waves. Near shore, the seabed becomes crucial: depth, refraction, shoaling, bottom friction and breaking transform the offshore sea state before it becomes surf. Because the 1° analysis grid cannot resolve these local processes in detail, this report describes the **offshore, predominantly deep-water extreme wave climate at the model scale**, not the size or quality of waves at a particular surf break.
-
-# Estimating 1-year and 40-year storm waves
-
-This analysis estimates two levels of extreme significant wave height: the 1-year ARI, representing relatively frequent storm waves, and the 40-year ARI, representing much rarer and generally larger storm waves. These are average recurrence intervals rather than schedules: under the statistical convention used here, the chance of exceeding each level in any year is `r formatC(100 * (1 - exp(-1)), digits = 1, format = "f")`% and `r formatC(100 * (1 - exp(-1 / 40)), digits = 2, format = "f")`%, respectively.
-
-The code reads the fitted extreme-value parameters, calculates the two wave-height maps, fits a latitude-only benchmark to each one and masks the displayed rasters to the latitude range used for fitting.
+This relationship gives annual exceedance probabilities of `r formatC(100 * (1 - exp(-1)), digits = 1, format = "f")`% for the 1-year ARI and `r formatC(100 * (1 - exp(-1 / 40)), digits = 2, format = "f")`% for the 40-year ARI. Either level may occur more or less often than its ARI suggests during any particular period. The code reads the fitted extreme-value parameters, calculates both wave-height maps, fits a latitude-only benchmark to each and masks the displayed rasters to the latitude range used for fitting.
 
 ```{r estimate-return-periods, results='hide'}
 # Return periods assessed in this report.  Under the Poisson convention,
@@ -140,7 +339,7 @@ scale <- r[[2]]
 shape <- r[[3]]
 
 # Calculate the return levels and fit the latitude-only models.
-# Julian's original Hs colour scale.
+# Shared significant-wave-height colour scale used in the maps.
 colz <- rev(c(
   "#000078", "#0000BB", "#0000FF", "#0C3AFC", "#1975FA", "#25B0F7",
   "#32EBF5", "#73EEE6", "#B4F1D7", "#F5F5C8", "#F5F564", "#F5E032",
@@ -210,11 +409,31 @@ result_40yr <- results[[match(40, ARIs)]]
 stopifnot(!is.null(result_1yr), !is.null(result_40yr))
 ```
 
-# Results
+# Why does latitude influence wave heights?
 
-## The headline result
+<div class="plain-language">
+The Sun warms the equator more strongly than the poles, driving atmospheric circulation and broad wind and storm belts. Earth’s rotation and land masses modify that circulation. Latitude therefore provides a strong first-order guide to the global storm-wave climate, while ocean-basin size, fetch, sheltering and regional storms explain why locations at the same latitude can still experience very different waves.
+</div>
 
-The share of the full map-to-map variation represented by latitude alone is measured by the all-cell $R^2$. For example, an $R^2$ of 0.80 means that the latitude-only curve represents 80% of the geographic variance in the full field. The median-profile $R^2$ asks an easier question: how well does the curve follow the typical wave height at each latitude? The difference between the two statistics reflects the east--west and regional structure that a latitude-only curve cannot represent. Both statistics describe the global model grid and therefore primarily characterise offshore, deep-water conditions rather than nearshore wave transformation.
+At the broadest scale, three sets of controls determine the extreme significant wave height likely to occur at a location.
+
+First, consider the **storm climate**. The Sun heats equatorial regions more strongly than the poles, creating temperature and pressure differences that drive global atmospheric circulation. Earth’s rotation organises this circulation into prevailing wind belts, while land masses further modify the winds and storm tracks. Even on a water-only Earth with no continents, wave heights would vary with latitude because the tropics, subtropics and mid-latitudes would still experience different winds and storm systems.
+
+**Read more about global circulation patterns:** the Australian Bureau of Meteorology explains how tropical rising air contributes to global pressure and wind belts in its [subtropical-ridge explainer](https://www.bom.gov.au/resources/learn-and-explore/climate-knowledge-centre/climate-factors/subtropical-ridge), and describes the storm-bearing Southern Ocean westerlies in its [Southern Annular Mode explainer](https://www.bom.gov.au/climate/sam/).
+
+Second, the real world has **land and ocean basins**. Fetch—the distance over water across which the wind blows in a consistent direction—acts like a runway for wave growth. A long, unobstructed ocean path gives wind more room to build waves, while islands and continents can shelter a coast or block swell arriving from a particular direction. The greater land area in the Northern Hemisphere breaks up ocean basins and limits many fetch and swell pathways, whereas the Southern Ocean provides a more continuous expanse of open water. The three classic controls on locally generated wind waves are wind speed, wind duration and fetch ([NOAA National Ocean Service](https://oceanservice.noaa.gov/education/tutorial_currents/03coastal1.html)).
+
+Third, the pattern depends on **how rare an event is being considered**. The 40-year ARI represents a rarer part of the fitted extreme-value distribution than the 1-year ARI and is generally associated with larger waves. Regional systems such as tropical cyclones can become more prominent in this rarer tail.
+
+Other controls include swell direction, seasonal and longer-term climate variability, sea ice, and currents that can steepen or focus waves. Near shore, the seabed becomes crucial: depth, refraction, shoaling, bottom friction and breaking transform the offshore sea state before it becomes surf. Those processes are not resolved in detail by this 1° global analysis and are explored more closely in the companion CCHaPS report.
+
+# How much of the global wave climate does latitude explain?
+
+<div class="plain-language">
+Across the offshore, predominantly deep-water global analysis grid, latitude alone represents <strong>`r round(100 * result_1yr$r2_all, 1)`%</strong> of the mapped variation in the 1-year extreme wave heights and <strong>`r round(100 * result_40yr$r2_all, 1)`%</strong> in the 40-year extreme wave heights. That is a remarkably large share for one simple geographic variable, but it still leaves important regional differences for the full numerical model to describe.
+</div>
+
+The all-cell $R^2$ measures the goodness of fit between the latitude-only curve and the full map. For example, an $R^2$ of 0.80 means that the simple relationship represents 80% of the geographic variation in the wave-model-derived field. The median-profile $R^2$ asks an easier question: how well does the curve follow the typical wave height at each latitude? The difference between the two statistics reflects the east–west and regional structure that a latitude-only curve cannot represent.
 
 Before looking at the maps, the simple benchmark can be written as
 
@@ -222,15 +441,15 @@ $$
 \widehat{H_s}(\phi) = a + b\left[1 - \cos\left(\frac{2\pi(\phi-\phi_0)}{P}\right)\right],
 $$
 
-where $\phi$ is latitude, $a$ is the equatorial reference wave height, $b$ is the amplitude controlling how much wave height rises above the tropical baseline, $\phi_0$ is the latitude phase offset that allows a small north--south shift, and $P$ is the fixed period.
+where the **latitude**, $\phi$, locates each grid cell north or south of the equator; the **equatorial reference**, $a$, sets the tropical baseline; the **amplitude**, $b$, controls how far wave height rises above that baseline; the **phase offset**, $\phi_0$, allows a small north–south shift; and the **fixed period**, $P$, controls the width of the curve.
 
 This equation is a compact benchmark, not a physical model of every storm. Table 1 gives the numbers that define the two fitted curves. The period is fixed at 120 degrees for both fits so that the comparison is stable and consistent.
 
-```{r fitted-parameter-table}
+```{r fitted-parameter-table, echo=FALSE}
 fit_parameter_table <- do.call(rbind, lapply(results, function(x) {
   data.frame(
     ARI_years = x$ARI,
-    AEP = x$AEP,
+    AEP = 100 * x$AEP,
     equatorial_reference_a_m = x$a,
     amplitude_b_m = unname(x$co[["b"]]),
     phase_degrees = unname(x$co[["phase"]]),
@@ -243,29 +462,22 @@ knitr::kable(
   digits = 3,
   col.names = c(
     "ARI (years)",
-    "AEP",
+    "AEP (%)",
     "Equatorial reference, a (m)",
     "Amplitude, b (m)",
-    "Phase (degrees)",
-    "Fixed period (degrees)"
+    "Phase offset, φ₀ (degrees)",
+    "Fixed period, P (degrees)"
   ),
-  caption = "Table 1. The fitted parameters that define the latitude-only curves for the 1-year and 40-year ARIs."
+  caption = "Table 1. The fitted parameters that define the latitude-only curves for the 1-year and 40-year ARIs.",
+  table.attr = 'class="model-data-table"'
 )
 ```
 
-<div class="plain-language-box" role="note">
-<div class="plain-language-icon" aria-hidden="true">i</div>
-<div class="plain-language-content">
-<span class="plain-language-title">In plain language</span>
-<p>Across the offshore, predominantly deep-water global analysis grid, latitude alone represents <strong>`r round(100 * result_1yr$r2_all, 1)`%</strong> of the mapped variation in the 1-year extreme wave heights and <strong>`r round(100 * result_40yr$r2_all, 1)`%</strong> in the 40-year extreme wave heights. That is a remarkably large share for one simple geographic variable, but it still leaves important regional differences for the full numerical model to describe.</p>
-</div>
-</div>
+In both cases, the latitude-only relationship represents more than half of the mapped variation. This is consistent with the latitude-dependent distribution of winds and storms being a dominant first-order control. The remaining variation reflects regional influences such as fetch, basin geometry, swell pathways and storm tracks. Latitude therefore describes the broad engine of the global wave climate; it does not tell us exactly how that energy is distributed between individual ocean basins and coastlines.
 
-In both cases, more than half of the variance is explained by latitude. This supports the idea that the latitude-dependent distribution of winds and storms is a dominant first-order control. The remaining variance reflects regional influences such as fetch, basin geometry, swell pathways and storm tracks. Latitude therefore describes the broad engine of the global wave climate; it does not tell us exactly how that energy is distributed between individual ocean basins and coastlines.
-
-```{r results-summary}
+```{r results-summary, echo=FALSE}
 summary_table <- do.call(rbind, lapply(results, function(x) data.frame(
-  ARI_years = x$ARI, AEP = x$AEP, R2_all_grid_cells = x$r2_all,
+  ARI_years = x$ARI, AEP = 100 * x$AEP, R2_all_grid_cells = x$r2_all,
   variance_explained_all_cells_percent = 100 * x$r2_all,
   R2_median_latitude_profile = x$r2_profile,
   unexplained_all_cells_percent = 100 * (1 - x$r2_all)
@@ -275,17 +487,18 @@ knitr::kable(
   digits = 3,
   col.names = c(
     "ARI (years)",
-    "AEP",
+    "AEP (%)",
     "R²: all grid cells",
     "Variance represented (%)",
     "R²: median latitude profile",
     "Variance not represented (%)"
   ),
-  caption = "Table 2. How much of the offshore, predominantly deep-water global wave-height pattern is and is not represented by latitude alone. The raw R² statistics are retained alongside their percentage interpretation."
+  caption = "Table 2. How much of the offshore, predominantly deep-water global wave-height pattern is and is not represented by latitude alone. The raw R² statistics are retained alongside their percentage interpretation.",
+  table.attr = 'class="model-data-table"'
 )
 ```
 
-```{r return-period-plots, fig.width=12, fig.height=5.6, fig.cap="Figure 1. How wave-model-derived extreme significant wave height changes with latitude for the 1-year ARI (left) and 40-year ARI (right). Both panels use the same vertical scale. At each latitude, the five percentile lines show the range between relatively low- and high-wave regions; the black line is the global median. The purple curve is the latitude-only benchmark, and the grey vertical lines mark the limits used for fitting. These global-model results primarily represent offshore, deep-water conditions. A wide spread between the coloured lines means that places at the same latitude can still have very different wave climates."}
+```{r return-period-plots, echo=FALSE, fig.width=12, fig.height=5.6, fig.cap="Figure 1. How wave-model-derived extreme significant wave height changes with latitude for the 1-year ARI (left) and 40-year ARI (right). Both panels use the same vertical scale. At each latitude, the five viridis-coloured percentile lines show the range between relatively low- and high-wave regions. The purple curve is the latitude-only benchmark, and the grey vertical lines mark the limits used for fitting. These global-model results primarily represent offshore, deep-water conditions. A wide spread between the percentile lines means that places at the same latitude can still have very different wave climates."}
 figure1_max_hs <- max(vapply(results, function(x) {
   max(
     c(
@@ -296,16 +509,17 @@ figure1_max_hs <- max(vapply(results, function(x) {
   )
 }, numeric(1)))
 figure1_ylim <- c(0, ceiling(figure1_max_hs))
+percentile_colours <- viridisLite::viridis(5)
 
 plot_one_result <- function(x) {
-  matplot(x$lat_q$latitude, as.matrix(x$lat_q[, .(p5, p25, p50, p75, p95)]), type = "l", lty = c(2, 3, 1, 3, 2), lwd = c(1.5, 1.5, 2.5, 1.5, 1.5), col = c("orange", "red", "black", "dodgerblue", "cyan3"), xlab = "Latitude (degrees)", ylab = "Significant wave height, Hs (m)", ylim = figure1_ylim, main = paste0(x$ARI, "-year ARI extreme Hs\nLatitude represents ", round(100 * x$r2_all, 1), "% of mapped variance"))
+  matplot(x$lat_q$latitude, as.matrix(x$lat_q[, .(p5, p25, p50, p75, p95)]), type = "l", lty = c(2, 3, 1, 3, 2), lwd = c(1.5, 1.5, 2.5, 1.5, 1.5), col = percentile_colours, xlab = "Latitude (degrees)", ylab = "Significant wave height, Hs (m)", ylim = figure1_ylim, main = paste0(x$ARI, "-year ARI extreme Hs\nLatitude represents ", round(100 * x$r2_all, 1), "% of mapped variance"))
   lines(x$pred$latitude, x$pred$fit, col = "purple", lwd = 3); abline(v = c(fit_min_lat, fit_max_lat), col = "grey40")
   legend(
     "topleft",
     legend = c("5th", "25th", "Median", "75th", "95th", "Latitude-only model"),
     lty = c(2, 3, 1, 3, 2, 1),
     lwd = c(1.5, 1.5, 2.5, 1.5, 1.5, 3),
-    col = c("orange", "red", "black", "dodgerblue", "cyan3", "purple"),
+    col = c(percentile_colours, "purple"),
     ncol = 2,
     bty = "n",
     cex = 0.78
@@ -317,41 +531,61 @@ for (x in results) plot_one_result(x)
 par(old_par)
 ```
 
-# Where latitude works—and where it misses
+**Reading Figure 1.** The purple curve follows the broad rise from tropical waters into the stormier mid-latitudes, while the spread between the percentile lines shows the variation among ocean regions at the same latitude. The wider regional spread for the 40-year ARI indicates that rare storm systems and basin-scale geography become increasingly important for the largest events. At the highest southern latitudes, wave heights drop as they enter the Southern Ocean's marginal ice zone, where sea-ice cover limits local wave generation and attenuates waves propagating into the ice.
+
+# Where does the simple latitude relationship work—and where does it miss?
+
+<div class="plain-language">
+Latitude captures the broad global pattern, but the maps below show where regional geography and storm systems alter it. Red residual areas indicate that the wave-model-derived estimate is higher than the latitude-only relationship, including very extreme tropical-cyclone regions that become clearer in the 40-year map. Blue areas indicate lower-than-expected waves and are often associated with enclosed, sheltered or fetch-limited seas. These patterns identify where more detailed modelling is needed; they do not prove that one process caused each difference.
+</div>
 
 Read Figure 2 from top to bottom. The top row shows the full wave-model-derived estimate: this is the detailed offshore extreme-wave pattern represented on the 1° global analysis grid. The middle row shows what the world would look like if latitude were the only control. The bottom row subtracts the middle from the top, revealing the extra geography represented by the numerical model.
 
-The left column shows the 1-year ARI and the right column shows the rarer 40-year ARI. All six maps use matching colour ranges so they can be compared directly, and they are masked outside the latitude range used to fit the model (`r fit_min_lat`° to `r fit_max_lat`°).
+The left column shows the 1-year ARI and the right column shows the rarer 40-year ARI. The four wave-height panels share one colour range, and the two residual panels share another, allowing direct comparison between ARIs. All panels are masked outside the latitude range used to fit the model (`r fit_min_lat`° to `r fit_max_lat`°).
 
-The wave-height colour scale runs from 0 to 18 m in 1 m increments: blues show values below 5 m, yellows and reds show values from 5 to 11 m, and browns, purples and pinks show values above 11 m.
+The wave-height colour scale runs from 0 to 18 m in 1 m increments: blues show values below 5 m, yellows and reds show values from 5 to 11 m, and browns, purples and pinks show values above 11 m. The residual scale runs from -10 to 10 m: blue indicates that the wave-model-derived estimate is lower than the latitude-only relationship, white marks values close to zero and red indicates that it is higher.
 
-<div class="plain-language-box" role="note">
-<div class="plain-language-icon" aria-hidden="true">i</div>
-<div class="plain-language-content">
-<span class="plain-language-title">In plain language</span>
-<p>The regional differences from the latitude-only pattern are generally smaller for the 1-year ARI than for the longer 40-year ARI, whose larger residuals are consistent with a stronger influence from regional extreme-generating systems such as tropical cyclones. The coarse global model may represent broad continental-shelf effects, but it cannot resolve detailed nearshore bathymetry or shallow-water wave transformation. Those processes are examined using a higher-resolution model in the <a href="https://ausclimateservice.github.io/latitude-and-big-waves/CCHaPS_depth_limited_extreme_waves.html"><em>Shallow Water, Smaller Waves</em></a> follow-up report.</p>
-</div>
-</div>
+Figure 2 is plotted directly on the model's native longitude–latitude grid, with no map projection and no longitude rotation. The full global frame (180°W–180°E and 90°S–90°N) is retained so the rectangular world map keeps its standard 2:1 geographic aspect rather than being vertically compressed by cropping to the fitted latitude band. Wave values remain masked outside the fitted latitude range (`r fit_min_lat`° to `r fit_max_lat`°).
 
-```{r static-map-comparison, fig.width=12, fig.height=10.5, fig.cap="Figure 2. Where latitude succeeds and where regional geography matters. The 1-year ARI is on the left and the 40-year ARI is on the right. The top row shows the full wave-model-derived estimate, the middle row shows the latitude-only benchmark, and the bottom row shows their difference. Red means the full model is higher than latitude alone would suggest; blue means it is lower. Grey polygons show land. These global-model fields primarily represent offshore, deep-water conditions. The residual patterns highlight the influence of features such as fetch, basin shape, swell pathways and regional storm tracks, as represented by the numerical model."}
+```{r static-map-comparison, echo=FALSE, fig.width=12, fig.height=10.5, fig.cap="Figure 2. Where latitude succeeds and where regional geography matters, plotted directly on the native longitude–latitude grid with no map projection or longitude rotation. The full global frame is retained to preserve the standard 2:1 longitude–latitude aspect, while wave values remain masked outside the fitted latitude range. The 1-year ARI is on the left and the 40-year ARI is on the right. The top row shows the full wave-model-derived estimate, the middle row shows the latitude-only benchmark, and the bottom row shows their difference. The two shared colour bars apply to the four wave-height panels and the two residual panels, respectively. Red residuals mean that the full model is higher than latitude alone would suggest; blue residuals mean that it is lower. Grey polygons show land. These global-model fields primarily represent offshore, deep-water conditions."}
 old_par <- par(no.readonly = TRUE)
-par(
-  mfrow = c(3, 2),
-  mar = c(1.4, 1.3, 3.2, 3.8),
-  oma = c(0.3, 0.3, 0.8, 0.3)
-)
 
-# Create a simple land polygon from cells where the ocean wave field is absent.
+# Keep Figure 2 on the native longitude-latitude grid.
+# No projection, reprojection, longitude rotation or raster resampling is used.
+# The rasters already retain the full global extent; values outside the fitted
+# latitude range are NA because they were masked in run_return_period().
+static_hs_1 <- result_1yr$Hs_map
+static_hs_40 <- result_40yr$Hs_map
+static_latitude_1 <- result_1yr$latitude_model_map
+static_latitude_40 <- result_40yr$latitude_model_map
+static_residual_1 <- clamp(result_1yr$residual_map, lower = -10, upper = 10)
+static_residual_40 <- clamp(result_40yr$residual_map, lower = -10, upper = 10)
+
+# Retaining the complete -180..180 by -90..90 frame gives an unprojected
+# longitude-latitude world map its familiar 2:1 aspect. Cropping to only
+# -60..63 degrees would make the same 360-degree-wide map look flattened.
+world_xlim <- c(-180, 180)
+world_ylim <- c(-90, 90)
+
+# Land is derived directly from the source grid and is not projected/rotated.
+source_land_mask <- ifel(is.na(loc), 1, NA)
 land_mask_polygon <- as.polygons(
-  ifel(is.na(loc), 1, NA),
+  source_land_mask,
   aggregate = TRUE,
   values = FALSE,
   na.rm = TRUE
 )
-land_mask_polygon <- crop(
-  land_mask_polygon,
-  ext(-180, 180, fit_min_lat, fit_max_lat)
+
+layout(
+  matrix(
+    c(1, 2, 3, 4, 5, 6, 7, 7, 8, 8),
+    nrow = 5,
+    ncol = 2,
+    byrow = TRUE
+  ),
+  heights = c(1, 1, 1, 0.16, 0.16)
 )
+par(mar = c(0.55, 0.45, 1.55, 0.45), oma = c(0, 0, 0, 0))
 
 add_land_mask <- function() {
   plot(
@@ -359,74 +593,199 @@ add_land_mask <- function() {
     add = TRUE,
     col = "grey80",
     border = "grey55",
-    lwd = 0.3
+    lwd = 0.25
   )
 }
 
-# Top row: full wave-model-derived Hs.
-for (x in list(result_1yr, result_40yr)) {
+# Axis helper for compact geographic labels.
+lon_labels <- function(x) {
+  ifelse(
+    x == 0,
+    "0°",
+    paste0(abs(x), "°", ifelse(x < 0, "W", "E"))
+  )
+}
+lat_labels <- function(x) {
+  ifelse(
+    x == 0,
+    "0°",
+    paste0(abs(x), "°", ifelse(x < 0, "S", "N"))
+  )
+}
+
+plot_global_panel <- function(
+  z,
+  title,
+  colours,
+  display_range,
+  show_x = FALSE,
+  show_y = FALSE
+) {
   plot(
-    x$Hs_map,
-    range = c(0, 18),
-    col = colzRamp(18),
+    z,
+    range = display_range,
+    col = colours,
+    xlim = world_xlim,
+    ylim = world_ylim,
     axes = FALSE,
-    main = paste0("Wave-model-derived Hs\n", x$label)
+    xaxt = "n",
+    yaxt = "n",
+    legend = FALSE,
+    main = title,
+    cex.main = 1.40,
+    font.main = 2,
+    asp = 1,
+    colNA = "grey95"
   )
   add_land_mask()
+  box(col = "grey55", lwd = 0.6)
+
+  if (show_x) {
+    x_ticks <- seq(-180, 180, by = 60)
+    axis(
+      1,
+      at = x_ticks,
+      labels = lon_labels(x_ticks),
+      cex.axis = 0.95,
+      tck = -0.018,
+      mgp = c(1.2, 0.25, 0)
+    )
+  }
+
+  if (show_y) {
+    y_ticks <- seq(-90, 90, by = 30)
+    axis(
+      2,
+      at = y_ticks,
+      labels = lat_labels(y_ticks),
+      cex.axis = 0.95,
+      las = 1,
+      tck = -0.018,
+      mgp = c(1.2, 0.25, 0)
+    )
+  }
 }
 
-# Middle row: latitude-only model.
-for (x in list(result_1yr, result_40yr)) {
-  plot(
-    x$latitude_model_map,
-    range = c(0, 18),
-    col = colzRamp(18),
-    axes = FALSE,
-    main = paste0("Latitude-only Hs\n", x$label)
+draw_shared_colour_bar <- function(
+  breaks,
+  colours,
+  label,
+  tick_positions = breaks,
+  tick_labels = tick_positions
+) {
+  plot.new()
+  plot.window(
+    xlim = range(breaks),
+    ylim = c(0, 1),
+    xaxs = "i",
+    yaxs = "i"
   )
-  add_land_mask()
-}
-
-# Bottom row: numerical-model Hs minus latitude-only Hs.
-for (x in list(result_1yr, result_40yr)) {
-  plot(
-    x$residual_map,
-    range = c(-10, 10),
-    col = residual_ramp(41),
-    axes = FALSE,
-    main = paste0("Difference: wave model minus latitude-only\n", x$label)
+  rect(
+    xleft = head(breaks, -1),
+    ybottom = 0,
+    xright = tail(breaks, -1),
+    ytop = 1,
+    col = colours,
+    border = NA
   )
-  add_land_mask()
+  box(col = "grey35")
+  axis(
+    side = 1,
+    at = tick_positions,
+    labels = tick_labels,
+    cex.axis = 1.20,
+    las = 1,
+    tck = -0.18,
+    mgp = c(1.5, 0.35, 0)
+  )
+  mtext(label, side = 3, line = 0.10, cex = 1.20, font = 2)
 }
 
+wave_breaks <- seq(0, 18, by = 1)
+wave_colours <- colzRamp(length(wave_breaks) - 1)
+residual_breaks <- seq(-10, 10, by = 0.5)
+residual_colours <- residual_ramp(length(residual_breaks) - 1)
+
+par(xaxt = "n", yaxt = "n")
+plot_global_panel(
+  static_hs_1,
+  "Wave-model-derived: ARI = 1 year",
+  wave_colours,
+  c(0, 18),
+  show_y = TRUE
+)
+plot_global_panel(
+  static_hs_40,
+  "Wave-model-derived: ARI = 40 years",
+  wave_colours,
+  c(0, 18)
+)
+plot_global_panel(
+  static_latitude_1,
+  "Latitude-only: ARI = 1 year",
+  wave_colours,
+  c(0, 18),
+  show_y = TRUE
+)
+plot_global_panel(
+  static_latitude_40,
+  "Latitude-only: ARI = 40 years",
+  wave_colours,
+  c(0, 18)
+)
+plot_global_panel(
+  static_residual_1,
+  "Residual: ARI = 1 year",
+  residual_colours,
+  c(-10, 10),
+  show_x = TRUE,
+  show_y = TRUE
+)
+plot_global_panel(
+  static_residual_40,
+  "Residual: ARI = 40 years",
+  residual_colours,
+  c(-10, 10),
+  show_x = TRUE
+)
+
+par(mar = c(1.75, 3.0, 1.30, 3.0),xaxt = "s", yaxt = "s")
+draw_shared_colour_bar(
+  wave_breaks,
+  wave_colours,
+  "Extreme significant wave height, Hs (m)"
+)
+
+par(mar = c(1.75, 3.0, 1.30, 3.0),xaxt = "s", yaxt = "s")
+draw_shared_colour_bar(
+  residual_breaks,
+  residual_colours,
+  "Residual: wave model minus latitude-only model (m)",
+  tick_positions = seq(-10, 10, by = 2),
+  tick_labels = seq(-10, 10, by = 2)
+)
+
+layout(1)
 par(old_par)
 ```
 
-# What surfers and wave-watchers should take from this
+<p id="residual-guide" class="jargon-title"><strong>What do the red and blue residual areas show?</strong></p>
 
-- **The maps and statistics primarily represent deep-water, offshore conditions.** The 1° analysis grid does not resolve detailed coastal bathymetry, wave transformation or the final breaking of individual waves experienced at a beach or reef.
+Red residual areas show where the wave-model-derived estimate is higher than the latitude-only estimate. They become more prominent in the 40-year map, particularly in tropical-cyclone regions, which is consistent with very extreme cyclone-generated waves emerging in the rarer tail of the distribution. A latitude-only relationship cannot represent cyclone intensity, size, forward speed, track or the strongly asymmetric wave field around a cyclone. These regions require dedicated modelling, such as the approach described by [O’Grady (2024)](https://bioone.org/journals/journal-of-coastal-research/volume-113/issue-sp1/JCR-SI113-194.1/A-Parametric-Model-of-Tropical-Cyclone-Wave-Fields/10.2112/JCR-SI113-194.1.pdf).
 
-- **ARI indicates how rare an event is, not how long you need to wait for it to occur.** A 40-year ARI event is less likely in any given year than a 1-year ARI event. It could occur more than once within 40 years or not occur at all during that period.
+Blue residual areas show where the wave-model-derived estimate is lower than the latitude-only estimate. They are often consistent with enclosed, land-sheltered or fetch-limited wave climates, where winds have less distance to generate waves and land can block incoming swell. Examples include the North Sea, the Mediterranean Sea and waters off eastern Argentina. Red and blue patterns may also reflect model resolution, forcing and statistical uncertainty, so they should be treated as hypotheses for further investigation rather than attributed automatically to a single process.
 
-- **Latitude sets the broad background.** It places an ocean region within the global wind and storm belts, which is why one simple curve represents more than half of the mapped variance at both return periods.
+<p id="explore-maps" class="jargon-title"><strong>Explore the maps yourself</strong></p>
 
-- **Red and blue regions explain why locations at the same latitude can have different wave heights.** Red indicates that the wave-model-derived estimate is higher than the latitude-only estimate, while blue indicates that it is lower. These differences reflect regional influences such as storm type, fetch, basin geometry, swell pathways, land shelter, sea ice and water depth.
+<div class="plain-language">
+Use the interactive map to switch between the wave-model-derived heights, latitude-only estimates and their residuals for both ARIs. Comparing the layers shows where latitude closely follows the global numerical model and where regional storm systems, ocean-basin geometry, fetch and sheltering produce larger differences.
+</div>
 
-- **Red areas become more prominent in the 40-year difference map.** In tropical-cyclone regions, this is consistent with very extreme tropical-cyclone-generated waves emerging in the rarer tail of the distribution. 
-
-- **Tropical-cyclone wave regions require further modelling.** A latitude-only relationship cannot represent the effects of cyclone intensity, size, forward speed, track or the strongly asymmetric wave field around a cyclone. These regions require dedicated tropical-cyclone wave models, such as the approach described by [O’Grady (2024)](https://bioone.org/journals/journal-of-coastal-research/volume-113/issue-sp1/JCR-SI113-194.1/A-Parametric-Model-of-Tropical-Cyclone-Wave-Fields/10.2112/JCR-SI113-194.1.pdf).
-
-- **Blue areas are often consistent with fetch-limited wave climates.** Enclosed or land-sheltered waters provide less distance for winds to generate waves and can block swell from larger ocean basins. Examples include the North Sea, the Mediterranean Sea and waters off eastern Argentina.
-
-- **Residuals indicate where further investigation is needed.** Red and blue patterns should not automatically be attributed to a single process. They may also reflect model resolution, forcing or statistical uncertainty.
-
-# Explore the maps yourself
-
-Use the radio buttons in the bottom-left corner to switch between the six layers. A useful sequence is to select a wave-model-derived layer, switch to the latitude layer for the same ARI, and then select its residual layer to see where the two differ. Only one data layer is displayed at a time. Pan and zoom to compare ocean basins, remembering that the map primarily represents deep-water, offshore $H_s$, not the final breaking wave at the coast.
+Use the radio buttons in the bottom-left corner to switch between the six layers. A useful sequence is to select a wave-model-derived layer, switch to the latitude layer for the same ARI, and then select its residual layer to see where the two differ. Only one data layer is displayed at a time, and the legend in the top-right changes automatically with the selected layer. Pan and zoom to compare ocean basins, remembering that the map primarily represents deep-water, offshore $H_s$, not the final breaking wave at the coast.
 
 *Figure 3. Interactive version of the six fields in Figure 2. Choose a layer in the bottom-left, then pan and zoom to explore the regional pattern. The wave-model-derived and latitude layers use the wave-height colour key in metres. On the residual layers, red means the full model is higher than the latitude-only expectation and blue means it is lower. These global-model fields primarily represent offshore, deep-water conditions.*
 
-```{r interactive-leaflet-map}
+```{r interactive-leaflet-map, echo=FALSE}
 if (knitr::is_html_output()) {
   # The slight dateline crop prevents Leaflet projection/wrapping problems.
   leaflet_crop_extent <- ext(rast(xmin = -179.5, xmax = 180))
@@ -464,16 +823,28 @@ if (knitr::is_html_output()) {
   hs_groups <- layer_groups[1:4]
   residual_groups <- layer_groups[5:6]
 
-  hs_pal <- colorNumeric(
-    palette = colzRamp(18),
-    domain = c(0, 18),
-    na.color = "#00000000"
+  # Use 1 m residual classes in the interactive map and its colour key.
+  interactive_residual_breaks <- seq(-10, 10, by = 1)
+  interactive_residual_colours <- residual_ramp(
+    length(interactive_residual_breaks) - 1
   )
 
-  residual_pal <- colorNumeric(
-    palette = residual_ramp(41),
+  hs_pal <- colorBin(
+    palette = wave_colours,
+    bins = wave_breaks,
+    domain = c(0, 18),
+    na.color = "#00000000",
+    pretty = FALSE,
+    right = FALSE
+  )
+
+  residual_pal <- colorBin(
+    palette = interactive_residual_colours,
+    bins = interactive_residual_breaks,
     domain = c(-10, 10),
-    na.color = "#00000000"
+    na.color = "#00000000",
+    pretty = FALSE,
+    right = FALSE
   )
 
   interactive_map <- leaflet(
@@ -517,26 +888,6 @@ if (knitr::is_html_output()) {
     )
   }
 
-  # Add only two colour keys: one shared by all Hs layers and one shared by
-  # both residual layers.
-  interactive_map <- addLegend(
-    interactive_map,
-    pal = hs_pal,
-    values = c(0, 18),
-    title = "Hs (m)",
-    opacity = 1,
-    position = "bottomright"
-  )
-
-  interactive_map <- addLegend(
-    interactive_map,
-    pal = residual_pal,
-    values = c(-10, 10),
-    title = "Residual Hs (m)",
-    opacity = 1,
-    position = "bottomright"
-  )
-
   # baseGroups produces radio buttons, so only one raster is selected at a time.
   interactive_map <- addLayersControl(
     interactive_map,
@@ -554,7 +905,7 @@ if (knitr::is_html_output()) {
 
   interactive_map <- addScaleBar(
     interactive_map,
-    position = "topright",
+    position = "bottomright",
     options = scaleBarOptions(metric = TRUE, imperial = FALSE)
   )
 
@@ -566,19 +917,121 @@ if (knitr::is_html_output()) {
     lat2 = fit_max_lat
   )
 
-  interactive_map
+  format_legend_value <- function(value) {
+    if (abs(value - round(value)) < 1e-8) {
+      sprintf("%.0f", value)
+    } else {
+      sprintf("%.1f", value)
+    }
+  }
+
+  make_global_legend_panel <- function(
+    kind,
+    title,
+    breaks,
+    colours,
+    visible = FALSE
+  ) {
+    if (length(colours) != length(breaks) - 1) {
+      stop("Legend colours must match the number of intervals.")
+    }
+
+    rows <- lapply(seq_along(colours), function(i) {
+      htmltools::tags$div(
+        class = "global-legend-row",
+        htmltools::tags$span(
+          class = "global-legend-swatch",
+          style = paste0("background:", colours[i], ";")
+        ),
+        htmltools::tags$span(
+          paste0(
+            format_legend_value(breaks[i]),
+            " – ",
+            format_legend_value(breaks[i + 1])
+          )
+        )
+      )
+    })
+
+    htmltools::tags$div(
+      class = "global-legend-panel",
+      `data-legend-kind` = kind,
+      style = if (visible) NULL else "display:none;",
+      htmltools::tags$div(
+        class = "global-legend-title",
+        htmltools::HTML(title)
+      ),
+      htmltools::tagList(rows)
+    )
+  }
+
+  legend_html <- htmltools::tags$div(
+    class = "global-dynamic-legend",
+    role = "group",
+    `aria-label` = "Map legend",
+    make_global_legend_panel(
+      "wave",
+      "Extreme H<sub>s</sub> (m)",
+      wave_breaks,
+      wave_colours,
+      visible = TRUE
+    ),
+    make_global_legend_panel(
+      "residual",
+      "Wave model − latitude-only (m)",
+      interactive_residual_breaks,
+      interactive_residual_colours
+    )
+  )
+
+  interactive_map <- addControl(
+    interactive_map,
+    html = htmltools::HTML(as.character(legend_html)),
+    position = "topright",
+    layerId = "global-dynamic-legend",
+    className = "global-legend-wrapper"
+  )
+
+  legend_switch_js <- r"(
+function(el, x) {
+  var map = this;
+  var legend = el.querySelector(".global-dynamic-legend");
+
+  if (!legend) return;
+
+  function showLegend(layerName) {
+    var kind = layerName && layerName.indexOf("Residual") === 0
+      ? "residual"
+      : "wave";
+
+    var panels = legend.querySelectorAll(".global-legend-panel");
+    Array.prototype.forEach.call(panels, function(panel) {
+      panel.style.display =
+        panel.getAttribute("data-legend-kind") === kind ? "block" : "none";
+    });
+  }
+
+  map.on("baselayerchange", function(event) {
+    showLegend(event.name);
+  });
+
+  showLegend("Wave-model-derived Hs: ARI 1");
+}
+)"
+
+  htmlwidgets::onRender(interactive_map, legend_switch_js)
 } else {
   cat("The interactive map is available in the HTML version of this report.")
 }
 ```
 
-## Spin the same layers on a 3D globe
+<p id="spin-globe" class="jargon-title"><strong>Spin the same layers on a 3D globe</strong></p>
 
 The globe uses the same six masked rasters and the same colour scales as the flat map above. Choose the wave-model-derived field, latitude-only model or residual, then switch between the 1-year and 40-year ARIs. Drag to rotate the globe, use the mouse wheel or trackpad to zoom, and pause or restart the automatic spin with the button.
 
 *Figure 4. Interactive 3D view of the same wave-height fields. The coloured ocean surface is restricted to the latitude range used for fitting and primarily represents offshore, deep-water conditions. Grey areas are land or locations outside that fitted range. The legend changes automatically between significant wave height and residual wave height.*
 
-```{r interactive-threejs-globe, results='asis'}
+```{r interactive-threejs-globe, echo=FALSE, results='asis'}
 if (knitr::is_html_output()) {
   stopifnot(exists("interactive_map"), length(layer_groups) == 6)
 
@@ -987,187 +1440,34 @@ if (root) {
 }
 ```
 
-```{=html}
-<style>
-  .plain-language-box {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    margin: 1.25em 0;
-    padding: 16px 18px;
-    color: #173541;
-    background: #eaf7fb;
-    border: 1px solid #b8dfe8;
-    border-left: 6px solid #00a7c4;
-    border-radius: 7px;
-  }
 
-  .plain-language-icon {
-    display: flex;
-    flex: 0 0 30px;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    margin-top: 1px;
-    color: white;
-    background: #087da8;
-    border-radius: 50%;
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1;
-  }
+# What should surfers and wave-watchers take from this? {#surfer-takeaways}
 
-  .plain-language-content {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 1.14em;
-    line-height: 1.5;
-  }
-
-  .plain-language-content p {
-    margin: 0;
-  }
-
-  .plain-language-title {
-    display: block;
-    margin-bottom: 0.2em;
-    font-size: 1.04em;
-    font-weight: 700;
-  }
-
-  .figure img {
-    cursor: zoom-in;
-  }
-
-  .figure img:focus {
-    outline: 3px solid #3498db;
-    outline-offset: 4px;
-  }
-
-  #plot-lightbox {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    align-items: center;
-    justify-content: center;
-    padding: 54px 28px 28px;
-    background: rgba(0, 0, 0, 0.9);
-  }
-
-  #plot-lightbox.is-open {
-    display: flex;
-  }
-
-  #plot-lightbox-image {
-    display: block;
-    max-width: 96vw;
-    max-height: 90vh;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    background: white;
-  }
-
-  #plot-lightbox-close {
-    position: absolute;
-    top: 10px;
-    right: 18px;
-    border: 0;
-    padding: 2px 12px 8px;
-    color: white;
-    background: transparent;
-    font-size: 42px;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  #plot-lightbox-close:focus {
-    outline: 3px solid white;
-    outline-offset: 2px;
-  }
-</style>
-
-<div id="plot-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged figure" aria-hidden="true">
-  <button id="plot-lightbox-close" type="button" aria-label="Close enlarged figure">&times;</button>
-  <img id="plot-lightbox-image" alt="">
-</div>
-
-<script>
-(function () {
-  function initialisePlotLightbox() {
-    var lightbox = document.getElementById("plot-lightbox");
-    var enlargedImage = document.getElementById("plot-lightbox-image");
-    var closeButton = document.getElementById("plot-lightbox-close");
-    var previousFocus = null;
-
-    if (!lightbox || !enlargedImage || !closeButton) return;
-
-    function openLightbox(sourceImage) {
-      previousFocus = sourceImage;
-      enlargedImage.src = sourceImage.src;
-      enlargedImage.alt = sourceImage.alt || "Enlarged figure";
-      lightbox.classList.add("is-open");
-      lightbox.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";
-      closeButton.focus();
-    }
-
-    function closeLightbox() {
-      lightbox.classList.remove("is-open");
-      lightbox.setAttribute("aria-hidden", "true");
-      enlargedImage.removeAttribute("src");
-      document.body.style.overflow = "";
-      if (previousFocus) previousFocus.focus();
-    }
-
-    document.querySelectorAll(".figure img").forEach(function (image) {
-      image.setAttribute("tabindex", "0");
-      image.setAttribute("role", "button");
-      image.setAttribute("aria-label", "Enlarge figure: " + (image.alt || "plot"));
-
-      image.addEventListener("click", function () {
-        openLightbox(image);
-      });
-
-      image.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openLightbox(image);
-        }
-      });
-    });
-
-    closeButton.addEventListener("click", closeLightbox);
-
-    lightbox.addEventListener("click", function (event) {
-      if (event.target === lightbox) closeLightbox();
-    });
-
-    document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && lightbox.classList.contains("is-open")) {
-        closeLightbox();
-      }
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialisePlotLightbox);
-  } else {
-    initialisePlotLightbox();
-  }
-})();
-</script>
-```
+| Key point | What it means |
+|:--|:--|
+| **The maps and statistics primarily represent deep-water, offshore conditions.** | The 1° analysis grid does not resolve detailed coastal bathymetry, wave transformation or the final breaking of individual waves at a beach or reef. |
+| **ARI indicates how rare an event is, not how long you need to wait for it to occur.** | A 40-year ARI event is less likely in any given year than a 1-year ARI event. It could occur more than once within 40 years or not occur at all during that period. |
+| **Latitude sets the broad background.** | It places an ocean region within the global wind and storm belts, which is why one simple curve represents more than half of the mapped variation at both ARIs. |
+| **Locations at the same latitude can still have very different waves.** | Red and blue residuals reflect regional influences such as storm type, fetch, basin geometry, swell pathways, land shelter, sea ice and water depth. |
+| **Very extreme tropical-cyclone regions emerge more clearly in the 40-year map.** | Latitude alone cannot represent cyclone intensity, size, forward speed, track or asymmetric wave fields, so these regions require dedicated modelling. |
+| **Blue areas are often consistent with fetch-limited wave climates.** | Enclosed or land-sheltered waters provide less distance for winds to generate waves and can block swell from larger ocean basins. |
+| **Residuals identify questions, not definitive causes.** | Red and blue patterns may also reflect model resolution, forcing and statistical uncertainty and should not automatically be attributed to one process. |
 
 # Looking ahead: a changing global circulation
+
+<div class="plain-language">
+The historical latitude relationship should not be assumed to remain fixed. Climate change can alter wind belts, storm tracks, tropical-cyclone behaviour and sea ice, changing both the broad latitude pattern and the regional differences around it.
+</div>
 
 Global atmospheric circulation patterns are changing as the climate warms; for example, the joint CSIRO and Bureau of Meteorology [*State of the Climate 2024*](https://www.csiro.au/-/media/Environment/SOTC-2024/State-of-the-Climate-2024-Accessible-version.html) reports climate-related changes in atmospheric pressure and high-pressure systems across southern Australia. Because wave climates respond to the position and strength of wind belts, storm tracks and tropical-cyclone activity, these changes could alter both the fitted latitude relationship and the regional residual patterns. This does not invalidate the historical analysis, but its results should not be assumed to remain fixed: future applications should rerun the method using updated observations or future-climate wave-model projections.
 
 # Where the wave numbers come from
 
-The analysis uses a global set of extreme-value parameters derived from the CAWCR numerical wave model. It is not a live forecast, a direct buoy record or a surf-spot model. The extreme-value dataset is gridded at approximately 1° resolution and is therefore suited to broad offshore and deep-water patterns rather than detailed coastal or shallow-water conditions. The code downloads `CAWCR_GEVparameters.nc` from the CSIRO THREDDS server:
+<div class="plain-language">
+The analysis uses extreme-value parameters fitted to a global numerical wave-model hindcast. The approximately 1° grid is suitable for examining broad offshore patterns, but it is not a live forecast, direct observation record or detailed coastal model.
+</div>
+
+The input file, `CAWCR_GEVparameters.nc`, contains the fitted location, scale and shape parameters used to calculate each return level. The workflow downloads it from the CSIRO THREDDS server:
 
 <https://data-cbr.csiro.au/thredds/fileServer/catch_all/OA_SLE_archive/COWCLIP/EXTREMES/EVA_R/CSIRO_withMidCentury/CAWCR_GEVparameters.nc>
 
@@ -1193,8 +1493,68 @@ for (x in results) {
 
 # Limits and reproducibility notes
 
+<div class="plain-language">
+These results are suitable for explaining and screening broad global patterns. They should not be treated as local surf forecasts, engineering-design values or substitutes for observations and higher-resolution coastal modelling.
+</div>
+
 - The results, fitted relationships and $R^2$ statistics primarily describe offshore, deep-water significant wave height at the approximately 1° analysis-grid scale. They do not represent breaking-wave face height, surf quality or detailed wave transformation at an individual beach or reef.
 - The raster contains fitted GEV parameters rather than direct observations. `Glob_Hs` is therefore a **wave-model-derived estimate** calculated from those parameters.
 - The higher-resolution CCHaPS analysis in [*Shallow Water, Smaller Waves*](https://ausclimateservice.github.io/latitude-and-big-waves/CCHaPS_depth_limited_extreme_waves.html) provides a more suitable representation of Australian coastal waters and shallower depths.
 
 Future analysis could test whether the residual patterns are associated with tropical-cyclone track exposure, distance from the coast or bathymetric depth.
+
+The questions in this explainer adapt the familiar structure of a scientific article—introduction, aim, methods, results and discussion—into a more accessible conversation. They move from the purpose of the analysis and why it matters, through the analytical approach and physical explanation, to the main findings, their meaning and the limitations of the simplified relationship. This question-led structure retains the logic and scientific rigour of a journal article while helping readers understand what was investigated, how it was investigated, what was found and where more detailed numerical modelling is needed.
+
+This layered format follows the idea behind CoastAdapt’s [*Skimmers, Waders and Divers*](https://coastadapt-uat.ers.tst.ce.griffith.edu.au/about-coastadapt/coastadapt-information-are-you-a-skimmer-wader-or-diver/) framework.
+
+<script>
+(function () {
+  function initialiseLightbox() {
+    var overlay = document.getElementById('figure-lightbox');
+    if (!overlay) return;
+    var enlarged = overlay.querySelector('img');
+    var closeButton = overlay.querySelector('.lightbox-close');
+
+    function closeLightbox() {
+      overlay.classList.remove('open');
+      enlarged.src = '';
+    }
+
+    document.querySelectorAll('.main-container img').forEach(function (img) {
+      if (img.closest('.leaflet-container') || img.closest('#figure-lightbox')) return;
+      img.setAttribute('tabindex', '0');
+      img.setAttribute('role', 'button');
+      img.setAttribute('aria-label', 'Click to enlarge this figure');
+
+      function openLightbox() {
+        enlarged.src = img.src;
+        enlarged.alt = img.alt || 'Enlarged report figure';
+        overlay.classList.add('open');
+        closeButton.focus();
+      }
+
+      img.addEventListener('click', openLightbox);
+      img.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openLightbox();
+        }
+      });
+    });
+
+    closeButton.addEventListener('click', closeLightbox);
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closeLightbox();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeLightbox();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialiseLightbox);
+  } else {
+    initialiseLightbox();
+  }
+})();
+</script>
