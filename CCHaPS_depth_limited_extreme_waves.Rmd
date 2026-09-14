@@ -340,6 +340,10 @@ input_files <- list(
   <img src="" alt="Enlarged report figure">
 </div>
 
+```{r page-banner, echo=FALSE, out.width="100%", fig.align="center", fig.alt="A spherical Earth centred on Australia and the Pacific, with coloured latitude bands showing smaller waves near the equator, larger waves in the storm belts and regional cyclone-wave departures."}
+knitr::include_graphics("regional-wave-depth-banner.png")
+```
+
 # Why do the biggest ocean storm waves become smaller as they move closer to Australia's shoreline?
 
 <div class="plain-language">
